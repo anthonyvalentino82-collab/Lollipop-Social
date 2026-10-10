@@ -16,6 +16,29 @@ def run(cmd: list[str]) -> str:
     return proc.stdout
 
 
+def run_with_progress(cmd: list[str], duration: float, on_progress) -> None:
+    """Run an ffmpeg command, reporting 0..1 progress as it encodes."""
+    cmd = cmd[:1] + ["-progress", "pipe:1", "-nostats"] + cmd[1:]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    import threading
+    err: list[str] = []
+    t = threading.Thread(target=lambda: err.extend(proc.stderr.readlines()), daemon=True)
+    t.start()
+    for line in proc.stdout:
+        if line.startswith("out_time_us=") or line.startswith("out_time_ms="):
+            try:
+                secs = int(line.split("=", 1)[1]) / 1_000_000
+            except ValueError:
+                continue
+            if duration > 0:
+                on_progress(min(1.0, max(0.0, secs / duration)))
+    proc.wait()
+    t.join(timeout=5)
+    if proc.returncode != 0:
+        tail = "".join(err[-15:]).strip()
+        raise MediaError(f"{cmd[0]} failed:\n{tail}")
+
+
 def probe(path: Path) -> dict:
     out = run(["ffprobe", "-v", "error", "-print_format", "json",
                "-show_format", "-show_streams", str(path)])
@@ -50,18 +73,19 @@ def has_filter(name: str) -> bool:
         return False
 
 
-def normalize(src: Path, dst: Path, info: dict) -> None:
+def normalize(src: Path, dst: Path, info: dict, on_progress=lambda f: None) -> None:
     """Convert any phone video (HEVC, HDR, rotated, 4K, 60fps) into an H.264
     30fps working copy whose short side is at most 1080px."""
     if info["width"] <= info["height"]:
         scale = "scale='min(1080,iw)':-2"
     else:
         scale = "scale=-2:'min(1080,ih)'"
-    vf = [scale, "fps=30"]
+    # Drop frames and shrink first: everything after runs on 4x fewer pixels.
+    vf = ["fps=30", scale]
     # iPhone records HDR (HLG / Dolby Vision) by default; tone-map it to normal SDR.
     if info.get("color_transfer") in ("arib-std-b67", "smpte2084") and has_filter("zscale"):
-        vf = ["zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
-              "tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv"] + vf
+        vf += ["zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
+               "tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv"]
     vf.append("format=yuv420p")
     cmd = ["ffmpeg", "-y", "-i", str(src), "-vf", ",".join(vf),
            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
@@ -73,7 +97,7 @@ def normalize(src: Path, dst: Path, info: dict) -> None:
         cmd = cmd[:3] + ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"] + cmd[3:] + [
             "-map", "0:v", "-map", "1:a", "-c:a", "aac", "-shortest"]
     cmd.append(str(dst))
-    run(cmd)
+    run_with_progress(cmd, info.get("duration", 0), on_progress)
 
 
 def extract_wav(src: Path, dst: Path, rate: int = 16000) -> None:

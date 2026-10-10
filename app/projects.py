@@ -185,7 +185,8 @@ def prepare(pid: str, progress) -> dict:
     if info["duration"] > 600:
         raise RuntimeError("Please use a video shorter than 10 minutes.")
     progress(0.15, "Optimizing video")
-    media.normalize(original, d / "source.mp4", info)
+    media.normalize(original, d / "source.mp4", info,
+                    lambda f: progress(0.15 + 0.8 * f, f"Optimizing video… {int(f * 100)}%"))
     info2 = media.probe(d / "source.mp4")
     media.thumbnail(d / "source.mp4", d / "thumb.jpg", t=min(1.0, info2["duration"] / 2))
     original.unlink(missing_ok=True)  # save disk space; the working copy is all we need
