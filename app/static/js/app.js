@@ -197,7 +197,8 @@ const SIZE_NAMES = { s: "Small", m: "Medium", l: "Large", full: "Full screen" };
 function setSize(sz) {
   state.size = sz;
   document.body.dataset.size = sz;
-  $("sizeLabel").textContent = SIZE_NAMES[sz];
+  document.querySelectorAll(".size-label").forEach((e) => (e.textContent = SIZE_NAMES[sz]));
+  $("exitFull").hidden = sz !== "full";
   if (sz === "full") window.scrollTo({ top: 0 });
   preview.draw();
   placeSizeHint();
@@ -207,29 +208,36 @@ function setSize(sz) {
 // The note + moving arrow beside the size button (shown while editing, when there's room).
 function placeSizeHint() {
   const hint = $("sizeHint");
-  const btn = $("sizeBtn");
-  const editing = document.body.classList.contains("sheet-open") && state.size !== "full" && state.project && !btn.hidden;
-  if (!editing) { hint.hidden = true; return; }
-  const r = btn.getBoundingClientRect();
-  const stage = $("stage").getBoundingClientRect();
-  const room = window.innerWidth - stage.right - 12;
-  if (room < 110) { hint.hidden = true; return; }
+  const editing = document.body.classList.contains("sheet-open") && state.size !== "full" && state.project;
+  if (!editing || recall("lp_size_hint_done")) { hint.hidden = true; return; } // once they've used it, they know
   hint.hidden = false;
-  hint.style.left = `${stage.right + window.scrollX + 6}px`;
-  hint.style.width = `${Math.min(room, 190)}px`;
-  // Bottom of the note lines up with the bottom of the video; the arrow sits level with the button.
-  hint.style.top = `${stage.bottom + window.scrollY - hint.offsetHeight}px`;
-  hint.querySelector(".hint-arrow").style.marginBottom = `${Math.max(0, stage.bottom - (r.top + r.height / 2) - 16)}px`;
+  const r = $("sizeBtn").getBoundingClientRect();
+  const stage = $("stage").getBoundingClientRect();
+  const w = Math.min(190, window.innerWidth - 24);
+  hint.style.width = `${w}px`;
+  const left = Math.max(12, Math.min(window.innerWidth - w - 12, r.left + r.width / 2 - w + 24));
+  const top = r.top - hint.offsetHeight - 4;
+  // Only show it where it won't cover the video.
+  const overlaps = left < stage.right && left + w > stage.left && top < stage.bottom;
+  if (overlaps || top < 60) { hint.hidden = true; return; }
+  hint.style.left = `${left + window.scrollX}px`;
+  hint.style.top = `${top + window.scrollY}px`;
+  hint.querySelector(".hint-arrow").style.marginLeft = "";
 }
 window.addEventListener("resize", placeSizeHint);
 $("stage").addEventListener("transitionend", placeSizeHint); // re-place after every resize animation
 $("sheet").addEventListener("animationend", placeSizeHint);
 window.addEventListener("scroll", placeSizeHint, { passive: true });
-$("sizeBtn").addEventListener("click", (e) => {
+const cycleSize = (e) => {
   e.stopPropagation();
   setSize(SIZES[(SIZES.indexOf(state.size || "m") + 1) % SIZES.length]);
-  $("sizeBtn").classList.add("used");
-});
+  document.querySelectorAll(".size-btn").forEach((b) => b.classList.add("used"));
+  store("lp_size_hint_done", "1");
+  placeSizeHint();
+};
+$("sizeBtn").addEventListener("click", cycleSize);
+$("sizeBtnMain").addEventListener("click", cycleSize);
+$("exitFull").addEventListener("click", () => setSize(document.body.classList.contains("sheet-open") ? "s" : "m"));
 setSize("m");
 
 // ---------- saving ----------
@@ -317,7 +325,6 @@ async function openProject(p) {
   preview.setMusic(p.music?.file ? `${base}/${p.music.file}?v=${encodeURIComponent(p.music.name || "")}` : null);
   if (preview.needsMask()) preview.ensureMasker();
   $("playBtn").hidden = false;
-  $("sizeBtn").hidden = false;
   document.querySelectorAll(".tools button").forEach((b) => (b.disabled = false));
   $("btnAuto").disabled = false;
   $("btnAuto").hidden = false;
@@ -358,7 +365,7 @@ function resetToEmpty() {
   state.project = null;
   store("lp_project", null);
   $("empty").hidden = false;
-  ["scrub", "hint", "brollStrip", "warnings", "playBtn", "btnNew", "btnSave", "btnFine", "fineTune", "sizeBtn"].forEach((id) => ($(id).hidden = true));
+  ["scrub", "hint", "brollStrip", "warnings", "playBtn", "btnNew", "btnSave", "btnFine", "fineTune"].forEach((id) => ($(id).hidden = true));
   setSize("m");
   document.querySelectorAll(".tools button").forEach((b) => (b.disabled = true));
   $("btnAuto").disabled = true;
