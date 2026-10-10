@@ -333,8 +333,27 @@ export class Preview {
     let lines = [];
     for (const ln of parseHeadline(text)) lines = lines.concat(wrapWords(ln, measure, OW * k * (h.maxWidth || 0.92)));
     this.ctx.globalAlpha = h.opacity ?? 1;
-    const box = this.drawLines(lines, font, (h.x ?? 0.5) * this.CW, (h.y ?? 0.25) * this.CH,
-      size * (h.lineHeight || 0.95), [h.color || "#E9E1D3", h.accent || "#D7262E"]);
+    const colors = [h.color || "#E9E1D3", h.accent || "#D7262E"];
+    const cx = (h.x ?? 0.5) * this.CW, cy = (h.y ?? 0.25) * this.CH, lh = h.lineHeight || 0.95;
+    let box;
+    if (h.block !== false && lines.length) {
+      // Mirror of text.py: scale every line to the widest line's width → one squared-off block.
+      const target = Math.max(...lines.map(measure));
+      const base = h.size || 150;
+      const sizes = lines.map((ln) => Math.floor(Math.min(base * 3, base * target / Math.max(1, measure(ln)))) * k);
+      const total = sizes.reduce((n, s) => n + s * lh, 0);
+      let y = cy - total / 2, x0 = Infinity, x1 = -Infinity;
+      lines.forEach((ln, i) => {
+        y += sizes[i] * lh / 2;
+        const b = this.drawLines([ln], `${sizes[i]}px "${h.font || "Anton"}"`, cx, y, sizes[i] * lh, colors);
+        x0 = Math.min(x0, b[0]); x1 = Math.max(x1, b[2]);
+        y += sizes[i] * lh / 2;
+        this.ctx.font = font; // measure() uses the base font
+      });
+      box = [x0, cy - total / 2, x1, cy + total / 2];
+    } else {
+      box = this.drawLines(lines, font, cx, cy, size * lh, colors);
+    }
     this.ctx.globalAlpha = 1;
     this.boxes.headline = box.map((v) => v / k);
     this.lastHeadBox = this.boxes.headline;

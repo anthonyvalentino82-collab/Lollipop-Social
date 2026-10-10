@@ -78,9 +78,22 @@ def headline_layer(h: dict) -> Image.Image | None:
     for ln in parse_headline(text):
         lines += wrap_words(ln, lambda ws: _measure(f, ws), W * h.get("maxWidth", 0.92))
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    _draw_lines(ImageDraw.Draw(img), lines, f, h.get("x", 0.5) * W, h.get("y", 0.25) * H,
-                size * h.get("lineHeight", 0.95),
-                {False: h.get("color", "#E9E1D3"), True: h.get("accent", "#D7262E")})
+    colors = {False: h.get("color", "#E9E1D3"), True: h.get("accent", "#D7262E")}
+    cx, cy, lh = h.get("x", 0.5) * W, h.get("y", 0.25) * H, h.get("lineHeight", 0.95)
+    draw = ImageDraw.Draw(img)
+    if h.get("block", True) and lines:
+        # Block layout: every line is scaled up to the width of the widest line,
+        # so the headline is one big squared-off block (short lines get bigger).
+        target = max(_measure(f, ln) for ln in lines)
+        sizes = [int(min(size * 3, size * target / max(1, _measure(f, ln)))) for ln in lines]
+        total = sum(s * lh for s in sizes)
+        y = cy - total / 2
+        for ln, s in zip(lines, sizes):
+            y += s * lh / 2
+            _draw_lines(draw, [ln], font(h.get("font", "Anton"), s), cx, y, s * lh, colors)
+            y += s * lh / 2
+    else:
+        _draw_lines(draw, lines, f, cx, cy, size * lh, colors)
     if h.get("opacity", 1) < 1:
         a = img.getchannel("A").point(lambda v: int(v * h["opacity"]))
         img.putalpha(a)
