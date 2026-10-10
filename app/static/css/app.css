@@ -624,3 +624,19 @@ body.sheet-open #sizeBtnMain { display: none; }
 body.cam-open { overflow: hidden; }
 .hero-title { font-size: clamp(28px, 8.4vw, 42px); }
 .cam video.fit { object-fit: contain; }
+
+/* atom / nucleus behind the logo */
+.planet { position: absolute; left: 50%; top: 50%; width: 52%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; z-index: 0;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255,255,255,.55), transparent 22%),
+    repeating-linear-gradient(115deg, rgba(255,255,255,.07) 0 6px, transparent 6px 16px),
+    radial-gradient(circle at 40% 35%, #ff7a4a, #e3202a 45%, #5a0d12 80%);
+  background-size: 100% 100%, 200% 100%, 100% 100%;
+  box-shadow: 0 0 40px rgba(255,90,60,.6), inset -14px -16px 28px rgba(0,0,0,.55), inset 6px 6px 16px rgba(255,200,150,.25);
+  animation: planetSpin 9s linear infinite; }
+@keyframes planetSpin { to { background-position: 0 0, -200% 0, 0 0; } }
+.atom { position: absolute; inset: -6%; width: 112%; height: 112%; z-index: 0; overflow: visible; animation: atomTurn 40s linear infinite; }
+@keyframes atomTurn { to { rotate: 360deg; } }
+.atom .ring-path { fill: none; stroke: url(#ringGrad); stroke-width: 1.4; opacity: .9; filter: drop-shadow(0 0 3px rgba(242,194,48,.6)); }
+.orbit-core { z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .planet, .atom { animation: none; } }

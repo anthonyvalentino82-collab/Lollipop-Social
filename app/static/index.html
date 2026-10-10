@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
   <link rel="icon" href="/static/brand/favicon.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=36">
+  <link rel="stylesheet" href="/static/css/app.css?v=37">
 </head>
 <body>
   <div class="app">
@@ -34,6 +34,23 @@
 
       <div class="orbit" aria-hidden="true">
         <div class="orbit-glow"></div>
+        <div class="planet"></div>
+        <svg class="atom" viewBox="-100 -100 200 200">
+          <defs>
+            <radialGradient id="eGlow"><stop offset="0" stop-color="#fff"/><stop offset=".35" stop-color="#ffd36b"/><stop offset="1" stop-color="#ff5a3c" stop-opacity="0"/></radialGradient>
+            <linearGradient id="ringGrad" x1="0" x2="1"><stop offset="0" stop-color="#ff3d8b" stop-opacity=".1"/><stop offset=".5" stop-color="#f2c230" stop-opacity=".85"/><stop offset="1" stop-color="#e3202a" stop-opacity=".1"/></linearGradient>
+            <path id="o1" d="M -86 0 A 86 30 0 1 1 86 0 A 86 30 0 1 1 -86 0"/>
+          </defs>
+          <g transform="rotate(0)"><use href="#o1" class="ring-path"/>
+            <circle r="7" fill="url(#eGlow)"><animateMotion dur="3.2s" repeatCount="indefinite"><mpath href="#o1"/></animateMotion></circle>
+            <circle r="4" fill="url(#eGlow)" opacity=".5"><animateMotion dur="3.2s" begin="-.12s" repeatCount="indefinite"><mpath href="#o1"/></animateMotion></circle></g>
+          <g transform="rotate(60)"><use href="#o1" class="ring-path"/>
+            <circle r="7" fill="url(#eGlow)"><animateMotion dur="4.1s" begin="-1.3s" repeatCount="indefinite"><mpath href="#o1"/></animateMotion></circle>
+            <circle r="4" fill="url(#eGlow)" opacity=".5"><animateMotion dur="4.1s" begin="-1.42s" repeatCount="indefinite"><mpath href="#o1"/></animateMotion></circle></g>
+          <g transform="rotate(120)"><use href="#o1" class="ring-path"/>
+            <circle r="7" fill="url(#eGlow)"><animateMotion dur="3.6s" begin="-2.4s" repeatCount="indefinite"><mpath href="#o1"/></animateMotion></circle>
+            <circle r="4" fill="url(#eGlow)" opacity=".5"><animateMotion dur="3.6s" begin="-2.52s" repeatCount="indefinite"><mpath href="#o1"/></animateMotion></circle></g>
+        </svg>
         <div class="orbit-line l1"></div><div class="orbit-line l2"></div>
         <div class="ring r1">
           <span style="--a:-90deg"><b>💬 Captions</b></span>
