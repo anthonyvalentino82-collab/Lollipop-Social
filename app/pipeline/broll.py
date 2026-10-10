@@ -141,7 +141,7 @@ def search_stock(query: str, exclude: set[str] = frozenset()) -> dict | None:
 def _search_pexels(query: str, exclude: set[str]) -> dict | None:
     if not config.PEXELS_API_KEY:
         return None
-    r = httpx.get("https://api.pexels.com/videos/search",
+    r = httpx.get("https://api.pexels.com/v1/videos/search",
                   params={"query": query, "orientation": "portrait", "per_page": 10, "size": "medium"},
                   headers={"Authorization": config.PEXELS_API_KEY}, timeout=30)
     r.raise_for_status()
