@@ -104,6 +104,24 @@ def extract_wav(src: Path, dst: Path, rate: int = 16000) -> None:
     run(["ffmpeg", "-y", "-i", str(src), "-vn", "-ac", "1", "-ar", str(rate), str(dst)])
 
 
+def filmstrip(src: Path, dst: Path, duration: float, count: int = 10, w: int = 72, h: int = 128) -> None:
+    """One wide JPEG of `count` evenly spaced 9:16 thumbnails, for the trim bar.
+    Each frame is grabbed with a fast seek, so this takes a second or two."""
+    import numpy as np
+    from PIL import Image
+
+    vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}"
+    frames = []
+    for i in range(count):
+        t = duration * (i + 0.5) / count
+        proc = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t:.3f}", "-i", str(src), "-frames:v", "1",
+                               "-vf", vf, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True)
+        buf = proc.stdout
+        frames.append(np.frombuffer(buf, np.uint8).reshape(h, w, 3) if len(buf) == w * h * 3
+                      else (frames[-1] if frames else np.zeros((h, w, 3), np.uint8)))
+    Image.fromarray(np.hstack(frames)).save(dst, quality=80)
+
+
 def thumbnail(src: Path, dst: Path, t: float = 0.5, width: int = 240) -> None:
     run(["ffmpeg", "-y", "-ss", str(t), "-i", str(src), "-frames:v", "1",
          "-vf", f"scale={width}:-2", "-q:v", "4", str(dst)])

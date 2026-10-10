@@ -177,6 +177,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px;
 .sheet-grab { width: 40px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.2); margin: 8px auto 0; }
 .sheet-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 18px 4px; }
 .sheet-head h3 { margin: 0; font-size: 18px; }
+.sheet-body > * { flex-shrink: 0; }
 .sheet-body { overflow-y: auto; padding: 4px 18px 8px; display: flex; flex-direction: column; gap: 14px; -webkit-overflow-scrolling: touch; }
 .link { background: none; border: 0; color: var(--gold); font-weight: 700; font-size: 15px; padding: 6px 0; cursor: pointer; }
 
@@ -258,3 +259,26 @@ body.sheet-open .hint, body.sheet-open .broll, body.sheet-open .warnings { displ
 .pp-btn svg { width: 18px; height: 18px; fill: #fff; stroke: none; }
 .pp-btn .i-pause, .pp-btn.playing .i-play { display: none; }
 .pp-btn.playing .i-pause { display: block; }
+
+/* trim filmstrip */
+.strip-labels { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--muted); }
+.strip-labels .len { color: var(--gold); }
+.strip-wrap { position: relative; height: 64px; flex: 0 0 64px; margin: 0 14px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.strip { position: absolute; inset: 0; border-radius: 8px; background: #000 center / 100% 100% no-repeat; }
+.shade { position: absolute; top: 0; bottom: 0; background: rgba(10, 4, 5, .72); pointer-events: none; }
+.shade.l { left: 0; border-radius: 8px 0 0 8px; }
+.shade.r { right: 0; border-radius: 0 8px 8px 0; }
+.trim-box { position: absolute; top: -3px; bottom: -3px; border-top: 3px solid var(--gold); border-bottom: 3px solid var(--gold); pointer-events: none; }
+.handle {
+  position: absolute; top: -3px; bottom: -3px; width: 22px; background: var(--gold); display: grid; place-items: center;
+  touch-action: none; cursor: ew-resize; z-index: 2;
+}
+.handle.l { transform: translateX(-100%); border-radius: 8px 0 0 8px; }
+.handle.r { border-radius: 0 8px 8px 0; }
+.handle span { width: 3px; height: 22px; border-radius: 2px; background: rgba(0,0,0,.55); }
+.handle.active { filter: brightness(1.15); box-shadow: 0 0 0 4px rgba(242,194,48,.25); }
+.playhead { position: absolute; top: -8px; bottom: -8px; width: 2px; margin-left: -1px; background: #fff; border-radius: 1px; pointer-events: none; z-index: 3; box-shadow: 0 0 4px rgba(0,0,0,.6); }
+.nudges { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nudge { display: flex; align-items: center; gap: 6px; }
+.nudge .label { flex: 0 0 auto; margin-right: 2px; }
+.nudge .small-btn { flex: 1; padding: 8px 4px; font-size: 13px; }

@@ -110,6 +110,7 @@ function updateScrub(t) {
   if (!seekDragging) { $("seek").value = v; }
   $("seek").style.setProperty("--p", `${v / 10}%`);
   highlightCaptionRow(t);
+  if (state.sheet === "trim" && trimUI) trimUI.head.style.left = `${(t / trimUI.dur) * 100}%`;
 }
 let seekDragging = false;
 $("seek").addEventListener("input", () => {
@@ -399,27 +400,97 @@ function swatches(label, colors, current, onpick) {
   return el("div", { class: "field" }, el("label", { class: "label" }, label), wrap);
 }
 
-// ----- TRIM -----
+// ----- TRIM (filmstrip with draggable handles) -----
+let trimUI = null;
+const fmtT = (s) => { s = Math.max(0, s || 0); return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`; };
 function trimSheet() {
   const p = state.project, dur = p.source.duration;
-  const info = el("p", { class: "note" });
-  const setInfo = () => (info.textContent = `Your video will be ${fmt1(p.trim.end - p.trim.start)} long.`);
-  setInfo();
-  let startS, endS;
-  const startField = slider("Start", { min: 0, max: dur, step: 0.05, value: p.trim.start, fmt: fmt1, oninput: (v) => {
-    p.trim.start = Math.min(v, p.trim.end - 1); video.currentTime = p.trim.start; setInfo(); save(["trim"]);
-  } });
-  const endField = slider("End", { min: 0, max: dur, step: 0.05, value: p.trim.end, fmt: fmt1, oninput: (v) => {
-    p.trim.end = Math.max(v, p.trim.start + 1); video.currentTime = Math.max(p.trim.start, p.trim.end - 0.05); setInfo(); save(["trim"]);
-  } });
-  startS = startField.querySelector("input"); endS = endField.querySelector("input");
+  const MIN = 1; // shortest allowed video, seconds
+  const strip = el("div", { class: "strip", style: `background-image:url(/api/projects/${p.id}/filmstrip?v=2)` });
+  const shadeL = el("div", { class: "shade l" }), shadeR = el("div", { class: "shade r" });
+  const box = el("div", { class: "trim-box" });
+  const hL = el("div", { class: "handle l" }, el("span")), hR = el("div", { class: "handle r" }, el("span"));
+  const head = el("div", { class: "playhead" });
+  const wrap = el("div", { class: "strip-wrap" }, strip, shadeL, shadeR, box, hL, hR, head);
+  const lblStart = el("span"), lblLen = el("span", { class: "len" }), lblEnd = el("span");
+  const labels = el("div", { class: "strip-labels" }, lblStart, lblLen, lblEnd);
+
+  const pct = (t) => `${(t / dur) * 100}%`;
+  const paint = () => {
+    const { start, end } = p.trim;
+    shadeL.style.width = pct(start);
+    shadeR.style.width = `${(1 - end / dur) * 100}%`;
+    box.style.left = hL.style.left = pct(start);
+    box.style.right = `${(1 - end / dur) * 100}%`;
+    hR.style.left = pct(end);
+    lblStart.textContent = `Start ${fmtT(start)}`;
+    lblEnd.textContent = `End ${fmtT(end)}`;
+    lblLen.textContent = `${fmtT(end - start)} long`;
+  };
+  const timeAt = (e) => {
+    const r = wrap.getBoundingClientRect();
+    return Math.min(dur, Math.max(0, ((e.clientX - r.left) / r.width) * dur));
+  };
+  const drag = (which) => (e) => {
+    e.preventDefault(); e.stopPropagation();
+    preview.pause();
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    target.classList.add("active");
+    const move = (ev) => {
+      const t = timeAt(ev);
+      if (which === "l") p.trim.start = +Math.min(t, p.trim.end - MIN).toFixed(2);
+      else p.trim.end = +Math.max(t, p.trim.start + MIN).toFixed(2);
+      video.currentTime = which === "l" ? p.trim.start : Math.max(p.trim.start, p.trim.end - 0.04);
+      paint();
+    };
+    const up = () => {
+      target.classList.remove("active");
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", up);
+      target.removeEventListener("pointercancel", up);
+      save(["trim"]); markTools();
+    };
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", up);
+    target.addEventListener("pointercancel", up);
+    move(e);
+  };
+  hL.addEventListener("pointerdown", drag("l"));
+  hR.addEventListener("pointerdown", drag("r"));
+  // Tap or slide anywhere else on the strip to scrub the preview.
+  wrap.addEventListener("pointerdown", (e) => {
+    preview.pause();
+    wrap.setPointerCapture(e.pointerId);
+    const seek = (ev) => { video.currentTime = timeAt(ev); };
+    seek(e);
+    const up = () => { wrap.removeEventListener("pointermove", seek); wrap.removeEventListener("pointerup", up); };
+    wrap.addEventListener("pointermove", seek);
+    wrap.addEventListener("pointerup", up);
+  });
+  trimUI = { head, dur };
+  paint();
+  const nudge = (which, d) => () => {
+    if (which === "l") p.trim.start = +Math.min(Math.max(0, p.trim.start + d), p.trim.end - MIN).toFixed(2);
+    else p.trim.end = +Math.max(Math.min(dur, p.trim.end + d), p.trim.start + MIN).toFixed(2);
+    preview.pause();
+    video.currentTime = which === "l" ? p.trim.start : Math.max(p.trim.start, p.trim.end - 0.04);
+    paint(); save(["trim"]);
+  };
   return [
-    el("p", { class: "note" }, "Cut off the beginning and end. Scrub the preview, then tap a button — or drag the sliders."),
-    startField, endField,
+    el("p", { class: "note" }, "Drag the yellow handles to cut the start and end. The preview shows the exact frame. Tap the strip to scrub."),
+    labels,
+    wrap,
+    el("div", { class: "nudges" },
+      el("div", { class: "nudge" }, el("span", { class: "label" }, "Start"),
+        el("button", { class: "small-btn", onclick: nudge("l", -0.1) }, "−0.1s"),
+        el("button", { class: "small-btn", onclick: nudge("l", 0.1) }, "+0.1s")),
+      el("div", { class: "nudge" }, el("span", { class: "label" }, "End"),
+        el("button", { class: "small-btn", onclick: nudge("r", -0.1) }, "−0.1s"),
+        el("button", { class: "small-btn", onclick: nudge("r", 0.1) }, "+0.1s"))),
     el("div", { class: "grid2" },
-      el("button", { class: "small-btn", onclick: () => { p.trim.start = Math.min(video.currentTime, p.trim.end - 1); startS.value = p.trim.start; startS.dispatchEvent(new Event("input")); } }, "Start here"),
-      el("button", { class: "small-btn", onclick: () => { p.trim.end = Math.max(video.currentTime, p.trim.start + 1); endS.value = p.trim.end; endS.dispatchEvent(new Event("input")); } }, "End here")),
-    info,
+      el("button", { class: "small-btn", onclick: () => { p.trim.start = +Math.min(video.currentTime, p.trim.end - MIN).toFixed(2); paint(); save(["trim"]); } }, "Start at playhead"),
+      el("button", { class: "small-btn", onclick: () => { p.trim.end = +Math.max(video.currentTime, p.trim.start + MIN).toFixed(2); paint(); save(["trim"]); } }, "End at playhead")),
     el("button", { class: "small-btn wide", onclick: () => { p.trim = { start: 0, end: dur }; save(["trim"]); openSheet("trim"); } }, "Reset trim"),
   ];
 }

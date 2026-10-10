@@ -189,6 +189,7 @@ def prepare(pid: str, progress) -> dict:
                     lambda f: progress(0.15 + 0.8 * f, f"Optimizing video… {int(f * 100)}%"))
     info2 = media.probe(d / "source.mp4")
     media.thumbnail(d / "source.mp4", d / "thumb.jpg", t=min(1.0, info2["duration"] / 2))
+    media.filmstrip(d / "source.mp4", d / "filmstrip2.jpg", info2["duration"])
     original.unlink(missing_ok=True)  # save disk space; the working copy is all we need
     with _lock:
         p = load(pid)
