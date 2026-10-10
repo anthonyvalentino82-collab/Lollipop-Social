@@ -95,7 +95,7 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
     n_frames = max(1, int(round(dur * FPS)))
 
     # ---- audio ----
-    progress(0.02, "Mixing audio")
+    progress(0.02, "Saving your video — preparing audio")
     voice = pdir / "voice_clean.wav"
     if project.get("audio", {}).get("clean", True):
         if not voice.exists():
@@ -192,7 +192,7 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
 
             enc.stdin.write(frame.tobytes())
             if i % 15 == 0:
-                progress(0.05 + 0.93 * i / n_frames, f"Rendering {int(100 * i / n_frames)}%")
+                progress(0.05 + 0.93 * i / n_frames, "Saving your video")
         enc.stdin.close()
         err = enc.stderr.read().decode(errors="ignore")
         if enc.wait() != 0:

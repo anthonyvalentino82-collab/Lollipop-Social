@@ -139,6 +139,47 @@ async function flush() {
   catch (e) { if (!(e instanceof AuthError)) toast(`Couldn't save: ${e.message}`); }
 }
 
+// Download a file while reporting 0..1 progress.
+async function fetchWithProgress(url, onProgress) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Download failed (${r.status})`);
+  const total = +r.headers.get("Content-Length") || 0;
+  if (!r.body || !total) return r.blob();
+  const reader = r.body.getReader();
+  const chunks = [];
+  let got = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    got += value.length;
+    onProgress(got / total);
+  }
+  return new Blob(chunks, { type: r.headers.get("Content-Type") || "video/mp4" });
+}
+
+// "Loading your video…" with a percentage until the preview can show a frame.
+let loadingVideo = false;
+function showVideoLoading() {
+  loadingVideo = true;
+  busy("Loading your video", 0);
+  const done = () => {
+    if (!loadingVideo) return;
+    loadingVideo = false;
+    busy(null);
+    ["progress", "loadeddata", "canplay", "error"].forEach((ev) => video.removeEventListener(ev, onEvt));
+  };
+  const onEvt = (e) => {
+    if (e.type === "progress" && video.duration) {
+      const b = video.buffered;
+      const end = b.length ? b.end(b.length - 1) : 0;
+      busy("Loading your video", Math.min(0.99, end / video.duration));
+    } else if (e.type !== "progress") done();
+  };
+  ["progress", "loadeddata", "canplay", "error"].forEach((ev) => video.addEventListener(ev, onEvt));
+  setTimeout(done, 25000); // never leave the overlay stuck
+}
+
 // ---------- project lifecycle ----------
 function logoUrl(id) {
   const l = (state.settings?.logos || []).find((x) => x.id === id);
@@ -154,6 +195,7 @@ async function openProject(p) {
   $("hint").hidden = false;
   $("btnNew").hidden = false;
   if (!video.src.endsWith(`${base}/source.mp4`)) {
+    showVideoLoading();
     video.src = `${base}/source.mp4`;
     video.load();
   }
@@ -279,11 +321,12 @@ $("btnSave").addEventListener("click", async () => {
   closeSheet();
   await flush();
   try {
-    busy("Rendering your video…", 0);
+    // One bar for the whole save: building on the server = 0-90%, download to the phone = 90-100%.
+    busy("Saving your video", 0);
     const job = await api(`/api/projects/${p.id}/render`, { method: "POST" });
-    const done = await waitJob(job, (j) => busy(j.message, j.progress));
-    busy("Getting your video…", 1);
-    const blob = await (await fetch(done.result.url)).blob();
+    const done = await waitJob(job, (j) => busy(j.status === "queued" ? "Waiting for the server…" : j.message, j.progress * 0.9));
+    busy("Saving to your phone", 0.9);
+    const blob = await fetchWithProgress(done.result.url, (f) => busy("Saving to your phone", 0.9 + 0.1 * f));
     busy(null);
     showExport(blob, done.result.url);
   } catch (e) {
