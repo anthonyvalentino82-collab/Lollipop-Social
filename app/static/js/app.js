@@ -157,8 +157,8 @@ const preview = new Preview($("canvas"), video, {
   },
   onTime: (t) => updateScrub(t),
 });
-video.addEventListener("play", () => { $("playBtn").hidden = true; $("ppBtn").classList.add("playing"); });
-video.addEventListener("pause", () => { $("playBtn").hidden = !state.project; $("ppBtn").classList.remove("playing"); });
+video.addEventListener("play", () => $("ppBtn").classList.add("playing"));
+video.addEventListener("pause", () => $("ppBtn").classList.remove("playing"));
 const togglePlay = () => { if (video.paused) preview.play(); else preview.pause(); };
 $("ppBtn").addEventListener("click", togglePlay);
 $("ppMini").addEventListener("click", togglePlay);
@@ -324,7 +324,6 @@ async function openProject(p) {
   preview.setBroll(p.broll || [], base);
   preview.setMusic(p.music?.file ? `${base}/${p.music.file}?v=${encodeURIComponent(p.music.name || "")}` : null);
   if (preview.needsMask()) preview.ensureMasker();
-  $("playBtn").hidden = false;
   document.querySelectorAll(".tools button").forEach((b) => (b.disabled = false));
   $("btnAuto").disabled = false;
   $("btnAuto").hidden = false;
@@ -365,7 +364,7 @@ function resetToEmpty() {
   state.project = null;
   store("lp_project", null);
   $("empty").hidden = false;
-  ["scrub", "hint", "brollStrip", "warnings", "playBtn", "btnNew", "btnSave", "btnFine", "fineTune"].forEach((id) => ($(id).hidden = true));
+  ["scrub", "hint", "brollStrip", "warnings", "btnNew", "btnSave", "btnFine", "fineTune"].forEach((id) => ($(id).hidden = true));
   setSize("m");
   document.querySelectorAll(".tools button").forEach((b) => (b.disabled = true));
   $("btnAuto").disabled = true;
