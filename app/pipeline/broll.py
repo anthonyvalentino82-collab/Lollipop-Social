@@ -14,7 +14,15 @@ STOP = set("""a an the and or but so to of in on at for is are was were be been 
 we our they them their he she his her this that these those with from as by not no yes just really very
 can could would should will do does did done have has had get got going go gonna want know think like
 about what when where who why how all any some more most than then there here now well also because
-into out up down over again only one two make made thing things way lot right okay yeah""".split())
+into out up down over again only one two make made thing things way lot right okay yeah
+years year today tomorrow yesterday week weeks month months day days time times people person
+everyone everybody someone something anything nothing everything clients client customers guys
+little great good better best bad need needs help helps start started looking look said say says
+tell talk talking sure actually literally maybe kind sort much many lots stuff point part
+first last next another every each still even back here there where which while
+makes making gets getting goes going gives giving take takes taking come comes coming want wants
+know knows think thinks feel keep keeps put let lets easier faster harder bigger smaller easy hard
+helped helping buy buying sell selling""".split())
 
 
 def plan_moments(lines: list[dict], duration: float, clip_tags: list[str]) -> tuple[list[dict], str]:
@@ -96,9 +104,15 @@ def _plan_with_keywords(lines, duration, clip_tags):
         text = " ".join(w["w"] for w in ln["words"]).lower()
         tag = next((t for t in clip_tags if t.lower() in text), "")
         words = [re.sub(r"[^a-z']", "", w["w"].lower()) for w in ln["words"]]
-        keywords = [w for w in words if len(w) >= 4 and w not in STOP]
-        if tag or keywords:
-            candidates.append((i, tag, max(keywords, key=len) if keywords else tag))
+        if i + 1 < len(lines):  # look one line ahead so two-word ideas aren't split
+            words += [re.sub(r"[^a-z']", "", w["w"].lower()) for w in lines[i + 1]["words"]]
+        good = [len(w) >= 4 and w not in STOP for w in words]
+        # Prefer two content words in a row ("mortgage rates", "dream home").
+        pairs = [f"{words[j]} {words[j + 1]}" for j in range(len(words) - 1) if good[j] and good[j + 1]]
+        singles = [w for w, g in zip(words, good) if g]
+        query = pairs[0] if pairs else (max(singles, key=len) if singles else tag)
+        if tag or query:
+            candidates.append((i, tag, query))
     want = max(1, min(5, round(duration / 12)))
     if not candidates:
         return []

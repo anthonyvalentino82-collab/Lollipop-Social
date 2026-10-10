@@ -52,9 +52,13 @@ export class Preview {
   }
 
   setBroll(list, base) {
+    // iPhone Safari won't play videos that are off-screen or invisible, so the
+    // B-roll players sit inside the preview, hidden underneath the canvas.
     const holder = document.getElementById("brollHolder") || Object.assign(document.createElement("div"), { id: "brollHolder" });
-    holder.style.cssText = "position:fixed;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;left:0;top:0";
-    document.body.appendChild(holder);
+    holder.style.cssText = "position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none";
+    if (holder.parentElement !== this.canvas.parentElement) this.canvas.parentElement.insertBefore(holder, this.canvas);
+    this.canvas.style.position = "relative";
+    this.canvas.style.zIndex = "1";
     for (const [id, v] of Object.entries(this.brollVids)) {
       if (!list.find((b) => b.id === id)) { v.pause(); v.remove(); delete this.brollVids[id]; }
     }
@@ -63,7 +67,10 @@ export class Preview {
       const v = document.createElement("video");
       Object.assign(v, { muted: true, playsInline: true, preload: "auto", src: `${base}/${b.file}` });
       v.setAttribute("playsinline", "");
+      v.setAttribute("muted", "");
+      v.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover";
       v.addEventListener("seeked", () => this.draw());
+      v.addEventListener("loadeddata", () => this.draw());
       holder.appendChild(v);
       this.brollVids[b.id] = v;
     }
@@ -114,7 +121,21 @@ export class Preview {
       this.video.currentTime = p.trim.start;
     }
     if (this.audio) this.wireAudio();
+    this.primeBroll();
     this.video.play().catch(() => {});
+  }
+
+  // Called from a tap: start (then pause) each B-roll player once so iPhone
+  // Safari loads them and allows them to play later without another tap.
+  primeBroll() {
+    for (const v of Object.values(this.brollVids)) {
+      if (v.dataset.primed) continue;
+      v.dataset.primed = "1";
+      v.play().then(() => {
+        const b = brollAt(this.p.broll, this.video.currentTime);
+        if (!b || this.brollVids[b.id] !== v) v.pause();
+      }).catch(() => {});
+    }
   }
 
   pause() { this.video.pause(); }
@@ -165,7 +186,7 @@ export class Preview {
       }
       this.drawCover(bv);
     } else {
-      if (bv) bv.load && bv.readyState === 0 && bv.load();
+      if (bv && !video.paused && bv.paused) bv.play().catch(() => {}); // kick off loading
       const [x, y, w, h] = cropRect(video.videoWidth, video.videoHeight, p.zoom, p.faceTrack, t);
       ctx.drawImage(video, x, y, w, h, 0, 0, CW, CH);
       if (p.headline && p.headline.enabled && (p.headline.text || "").trim()) {
