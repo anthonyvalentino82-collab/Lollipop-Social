@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
   <link rel="icon" href="/static/brand/favicon.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=26">
+  <link rel="stylesheet" href="/static/css/app.css?v=34">
 </head>
 <body>
   <div class="app">
@@ -52,11 +52,11 @@
         <span>💬 Text</span><span>Instagram</span><span>TikTok</span><span>Facebook</span><span>LinkedIn</span><span>YouTube</span>
       </div>
 
-      <label class="btn btn-cta">
-        <input type="file" accept="video/*" capture="user" id="inRecord" hidden>
+      <input type="file" accept="video/*" capture="user" id="inRecord" hidden>
+      <button class="btn btn-cta" id="btnRecord">
         <svg viewBox="0 0 24 24"><path d="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
         Record video
-      </label>
+      </button>
       <label class="btn btn-ghost hero-lib">
         <input type="file" accept="video/*" id="inUpload" hidden>
         Choose from library
@@ -175,8 +175,23 @@
           <div class="bar"><div class="bar-fill" id="busyBar"></div></div>
           <div class="busy-note">Keep this screen open — longer videos can take a few minutes.</div>
         </div>
+  <!-- In-app camera: full-quality recording straight into AI Edit -->
+  <div class="cam" id="cam" hidden>
+    <video id="camView" playsinline muted autoplay></video>
+    <div class="cam-top">
+      <button class="cam-x" id="camClose" aria-label="Close">✕</button>
+      <span class="cam-q" id="camQuality"></span>
+      <span class="cam-time" id="camTime" hidden>0:00</span>
+    </div>
+    <div class="cam-bottom">
+      <button class="link cam-native" id="camNative">Use iPhone camera</button>
+      <button class="cam-rec" id="camRec" aria-label="Record"><span></span></button>
+      <button class="cam-flip" id="camFlip" aria-label="Flip camera"><svg viewBox="0 0 24 24"><path d="M4 7h3l2-3h6l2 3h3v12H4zM9 13a3 3 0 105.2-2M15 11V8.5M15 11h-2.5"/></svg></button>
+    </div>
+  </div>
+
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=24"></script>
+  <script type="module" src="/static/js/app.js?v=25"></script>
 </body>
 </html>

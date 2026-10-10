@@ -398,6 +398,94 @@ async function handleVideoFile(file) {
   }
 }
 $("inRecord").addEventListener("change", (e) => { handleVideoFile(e.target.files[0]); e.target.value = ""; });
+
+// ---------- in-app camera ----------
+// iPhone Safari's built-in "record" picker saves at reduced (medium) quality, and a web
+// page can't change that. Recording the camera stream ourselves keeps full 1080p quality.
+const cam = { stream: null, rec: null, chunks: [], facing: "user", timer: null, t0: 0 };
+const camSupported = () => !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
+function camMime() {
+  for (const t of ["video/mp4;codecs=avc1.640028,mp4a.40.2", "video/mp4;codecs=avc1", "video/mp4",
+                   "video/webm;codecs=h264,opus", "video/webm;codecs=vp9,opus", "video/webm"]) {
+    if (MediaRecorder.isTypeSupported?.(t)) return t;
+  }
+  return "";
+}
+async function camStart() {
+  camStop();
+  const portrait = window.innerHeight >= window.innerWidth;
+  cam.stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: cam.facing, frameRate: { ideal: 30 },
+             width: { ideal: portrait ? 1080 : 1920 }, height: { ideal: portrait ? 1920 : 1080 } },
+    // Raw microphone: our own audio cleanup does a better job than the phone-call filters.
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+  });
+  const v = $("camView");
+  v.srcObject = cam.stream;
+  v.classList.toggle("mirror", cam.facing === "user");
+  await v.play().catch(() => {});
+  const st = cam.stream.getVideoTracks()[0].getSettings();
+  const short = Math.min(st.width || 0, st.height || 0);
+  $("camQuality").textContent = short ? `${short >= 1080 ? "HD 1080p" : short + "p"} · ${Math.round(st.frameRate || 30)} fps` : "";
+}
+function camStop() {
+  if (cam.rec && cam.rec.state !== "inactive") { cam.rec.onstop = null; cam.rec.stop(); }
+  cam.rec = null;
+  clearInterval(cam.timer);
+  cam.stream?.getTracks().forEach((t) => t.stop());
+  cam.stream = null;
+  $("camRec").classList.remove("on");
+  $("camTime").hidden = true;
+}
+async function openCamera() {
+  if (!camSupported()) { $("inRecord").click(); return; }
+  $("cam").hidden = false;
+  document.body.classList.add("cam-open");
+  try { await camStart(); }
+  catch (e) {
+    console.warn(e);
+    closeCamera();
+    toast("Couldn't open the camera here — using the iPhone camera instead.", 3500);
+    $("inRecord").click();
+  }
+}
+function closeCamera() {
+  camStop();
+  $("cam").hidden = true;
+  document.body.classList.remove("cam-open");
+}
+$("btnRecord").addEventListener("click", openCamera);
+$("camClose").addEventListener("click", closeCamera);
+$("camNative").addEventListener("click", () => { closeCamera(); $("inRecord").click(); });
+$("camFlip").addEventListener("click", async () => {
+  if (cam.rec) return; // don't switch mid-recording
+  cam.facing = cam.facing === "user" ? "environment" : "user";
+  try { await camStart(); } catch { toast("Couldn't switch cameras."); }
+});
+$("camRec").addEventListener("click", () => {
+  if (!cam.stream) return;
+  if (cam.rec) { cam.rec.stop(); return; }
+  const mimeType = camMime();
+  cam.chunks = [];
+  const rec = new MediaRecorder(cam.stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 12_000_000, audioBitsPerSecond: 192_000 });
+  cam.rec = rec;
+  rec.ondataavailable = (e) => { if (e.data && e.data.size) cam.chunks.push(e.data); };
+  rec.onstop = () => {
+    const type = rec.mimeType || mimeType || "video/mp4";
+    const blob = new Blob(cam.chunks, { type });
+    cam.rec = null;
+    closeCamera();
+    if (!blob.size) { toast("Nothing was recorded — please try again."); return; }
+    const file = new File([blob], `recording.${type.includes("webm") ? "webm" : "mp4"}`, { type });
+    handleVideoFile(file); // straight into upload + AI Edit, no camera roll
+  };
+  rec.start(1000);
+  cam.t0 = Date.now();
+  $("camRec").classList.add("on");
+  $("camTime").hidden = false;
+  $("camTime").textContent = "0:00";
+  cam.timer = setInterval(() => { $("camTime").textContent = fmt((Date.now() - cam.t0) / 1000); }, 250);
+});
 $("inUpload").addEventListener("change", (e) => { handleVideoFile(e.target.files[0]); e.target.value = ""; });
 $("btnNew").addEventListener("click", () => { if (confirm("Start a new video? (This one stays saved on the server for 14 days.)")) resetToEmpty(); });
 
