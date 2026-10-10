@@ -211,14 +211,17 @@ export class Preview {
           const kx = this.k;
           const side = Math.min(CW, CH, Math.max(hb[2] - hb[0], hb[3] - hb[1]) * 1.1 * kx);
           const cx = (hb[0] + hb[2]) / 2 * kx, cy = (hb[1] + hb[3]) / 2 * kx;
-          const rect = { x: Math.max(0, Math.min(CW - side, cx - side / 2)), y: Math.max(0, Math.min(CH - side, cy - side / 2)), s: side };
+          // Tall headlines don't fit a square that's at most the video's width: use a
+          // taller box that still covers every line (so no word ends up in front).
+          const rh = Math.min(CH, Math.max(side, (hb[3] - hb[1]) * 1.1 * kx));
+          const rect = { x: Math.max(0, Math.min(CW - side, cx - side / 2)), y: Math.max(0, Math.min(CH - rh, cy - rh / 2)), w: side, h: rh };
           if (fresh || video.paused || this.frameNo % 2 === 0) {
             if (fresh) this.masker.reset();
             this.masker.update(this.person, rect);
           }
           this.pctx.globalCompositeOperation = "destination-in";
           const mr = this.masker.rect || rect;
-          if (this.masker.mask.width > 1) this.pctx.drawImage(this.masker.mask, mr.x, mr.y, mr.s, mr.s);
+          if (this.masker.mask.width > 1) this.pctx.drawImage(this.masker.mask, mr.x, mr.y, mr.w, mr.h);
         }
         this.drawHeadline(p.headline);
         if (behind) ctx.drawImage(this.person, 0, 0);

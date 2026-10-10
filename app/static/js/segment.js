@@ -43,12 +43,12 @@ export class PersonMasker {
   reset() { this.prev = null; }
 
   // `source` is a canvas holding exactly the frame that is on screen.
-  // rect = {x, y, s}: the square part of `source` to cut out (around the headline).
+  // rect = {x, y, w, h}: the part of `source` to cut out (a square around the headline when it fits).
   update(source, rect) {
     if (!this.ready) return false;
-    const r = rect || { x: 0, y: 0, s: Math.min(source.width, source.height) };
+    const r = rect || { x: 0, y: 0, w: source.width, h: source.height };
     this.rect = r;
-    this.ictx.drawImage(source, r.x, r.y, r.s, r.s, 0, 0, this.input.width, this.input.height);
+    this.ictx.drawImage(source, r.x, r.y, r.w, r.h, 0, 0, this.input.width, this.input.height);
     const ts = Math.max(this.lastTs + 1, performance.now());
     this.lastTs = ts;
     try {
