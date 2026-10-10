@@ -31,3 +31,6 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5-5")
 
 OUT_W, OUT_H, OUT_FPS = 1080, 1920, 30
+# Final export encoding: CRF 18 (visually lossless) capped at 12 Mbps. "slow" squeezes a bit more
+# quality per MB but roughly doubles save time on a 1-CPU server; "medium" is the default.
+EXPORT_PRESET = os.environ.get("EXPORT_PRESET", "medium")

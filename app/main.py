@@ -29,7 +29,7 @@ def _token() -> str:
 async def require_password(request: Request, call_next):
     path = request.url.path
     public = path == "/" or path.startswith("/static/") or path in (
-        "/api/login", "/manifest.webmanifest", "/healthz")
+        "/api/login", "/manifest.webmanifest", "/healthz") or path.startswith("/icons/")
     if config.APP_PASSWORD and not public:
         if not hmac.compare_digest(request.cookies.get(AUTH_COOKIE, ""), _token()):
             return JSONResponse({"detail": "login required"}, status_code=401)
@@ -311,4 +311,5 @@ def index():
     return FileResponse(config.STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})
 
 
+app.mount("/icons", StaticFiles(directory=config.STATIC_DIR / "icons"), name="icons")
 app.mount("/static", StaticFiles(directory=config.STATIC_DIR), name="static")

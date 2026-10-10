@@ -88,7 +88,7 @@ def normalize(src: Path, dst: Path, info: dict, on_progress=lambda f: None) -> N
                "tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv"]
     vf.append("format=yuv420p")
     cmd = ["ffmpeg", "-y", "-i", str(src), "-vf", ",".join(vf),
-           "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+           "-c:v", "libx264", "-preset", "veryfast", "-crf", "15",
            "-movflags", "+faststart"]
     if info["has_audio"]:
         cmd += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2"]

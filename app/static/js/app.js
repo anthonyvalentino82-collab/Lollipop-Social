@@ -491,6 +491,7 @@ function showExport(blob, url) {
       },
     }, "Save to iPhone / Share"));
   }
+  acts.append(socialBubbles(file, url, v));
   acts.append(
     el("p", { class: "note center" }, canShare
       ? "Then choose “Save Video” for Photos — or send to Messages, Instagram, TikTok, Facebook, LinkedIn or YouTube."
@@ -499,6 +500,45 @@ function showExport(blob, url) {
   $("result").hidden = false;
   document.body.classList.add("result-open");
   v.play().catch(() => {}); // starts right away when allowed; otherwise tap ▶
+}
+
+// Instagram / TikTok / Facebook bubbles: save the video, then jump into the app.
+const SOCIAL = [
+  { name: "Instagram", icon: "/icons/instagram.png", app: "instagram://camera", web: "https://www.instagram.com/" },
+  { name: "TikTok", icon: "/icons/tiktok.png", app: "snssdk1233://", web: "https://www.tiktok.com/upload" },
+  { name: "Facebook", icon: "/icons/facebook.png", app: "fb://", web: "https://www.facebook.com/" },
+];
+function socialBubbles(file, url, player) {
+  const row = el("div", { class: "social-row" });
+  for (const s of SOCIAL) {
+    row.append(el("button", { class: "social-bubble", onclick: () => postTo(s, file, url, player) },
+      el("img", { src: s.icon, alt: "" }), el("span", {}, s.name)));
+  }
+  return row;
+}
+async function postTo(s, file, url, player) {
+  player.pause();
+  // a) Save the video. On the web, the iPhone share sheet is the only way to get it into Photos.
+  let saved = false;
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); saved = true; }
+    catch (e) { if (e.name === "AbortError") return; } // they closed the sheet: don't jump away
+  } else {
+    window.open(url, "_blank"); // can't share files here: open the video so it can be saved
+  }
+  // b) Toast, c) open the app, d) fall back to the website if the app didn't open.
+  toast(saved ? `Saved! Opening ${s.name}…` : `Opening ${s.name}…`, 1000);
+  setTimeout(() => {
+    let left = false;
+    const onHide = () => { left = true; };
+    document.addEventListener("visibilitychange", onHide, { once: true });
+    window.addEventListener("pagehide", onHide, { once: true });
+    window.location.href = s.app;
+    setTimeout(() => {
+      document.removeEventListener("visibilitychange", onHide);
+      if (!left && document.visibilityState === "visible") window.location.href = s.web;
+    }, 1500);
+  }, 1000);
 }
 
 $("resultBack").addEventListener("click", () => {

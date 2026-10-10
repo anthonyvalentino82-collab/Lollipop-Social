@@ -597,3 +597,10 @@ body.sheet-open #sizeBtnMain { display: none; }
 .rotator b { display: block; }
 /* keep each label centred on its point while it counter-spins (rotate about its own centre) */
 .ring span b { transform: none; translate: -50% -50%; }
+
+/* social bubbles under Save to iPhone / Share */
+.social-row { display: flex; justify-content: center; gap: 22px; padding: 2px 0 4px; }
+.social-bubble { display: flex; flex-direction: column; align-items: center; gap: 5px; background: none; border: 0; padding: 0; cursor: pointer; }
+.social-bubble img { width: 60px; height: 60px; border-radius: 50%; box-shadow: 0 4px 14px rgba(0,0,0,.5); transition: transform .12s; }
+.social-bubble:active img { transform: scale(.92); }
+.social-bubble span { font-size: 12px; font-weight: 700; color: var(--text); }
