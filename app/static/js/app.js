@@ -200,7 +200,31 @@ function setSize(sz) {
   $("sizeLabel").textContent = SIZE_NAMES[sz];
   if (sz === "full") window.scrollTo({ top: 0 });
   preview.draw();
+  placeSizeHint();
+  setTimeout(placeSizeHint, 260); // after the resize animation
 }
+
+// The note + moving arrow beside the size button (shown while editing, when there's room).
+function placeSizeHint() {
+  const hint = $("sizeHint");
+  const btn = $("sizeBtn");
+  const editing = document.body.classList.contains("sheet-open") && state.size !== "full" && state.project && !btn.hidden;
+  if (!editing) { hint.hidden = true; return; }
+  const r = btn.getBoundingClientRect();
+  const stage = $("stage").getBoundingClientRect();
+  const room = window.innerWidth - stage.right - 12;
+  if (room < 110) { hint.hidden = true; return; }
+  hint.hidden = false;
+  hint.style.left = `${stage.right + window.scrollX + 6}px`;
+  hint.style.width = `${Math.min(room, 190)}px`;
+  // Bottom of the note lines up with the bottom of the video; the arrow sits level with the button.
+  hint.style.top = `${stage.bottom + window.scrollY - hint.offsetHeight}px`;
+  hint.querySelector(".hint-arrow").style.marginBottom = `${Math.max(0, stage.bottom - (r.top + r.height / 2) - 16)}px`;
+}
+window.addEventListener("resize", placeSizeHint);
+$("stage").addEventListener("transitionend", placeSizeHint); // re-place after every resize animation
+$("sheet").addEventListener("animationend", placeSizeHint);
+window.addEventListener("scroll", placeSizeHint, { passive: true });
 $("sizeBtn").addEventListener("click", (e) => {
   e.stopPropagation();
   setSize(SIZES[(SIZES.indexOf(state.size || "m") + 1) % SIZES.length]);
@@ -522,6 +546,7 @@ function closeSheet() {
   $("sheet").hidden = true;
   document.body.classList.remove("sheet-open");
   if (state.size === "s") setSize("m");
+  placeSizeHint();
   state.sheet = null;
   state.wizard = null;
   preview.ghostCaptions = false;
@@ -554,6 +579,7 @@ function renderSheet({ key, title, step, content, footer }) {
   if (!document.body.classList.contains("sheet-open") || state.size === "full") setSize("s");
   document.body.classList.add("sheet-open");
   $("sheet").hidden = false; // no backdrop: the preview stays draggable while a panel is open
+  [60, 300, 700].forEach((ms) => setTimeout(placeSizeHint, ms));
   preview.draw();
 }
 

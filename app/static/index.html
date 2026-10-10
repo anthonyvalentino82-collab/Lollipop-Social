@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
   <link rel="icon" href="/static/brand/favicon.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=13">
+  <link rel="stylesheet" href="/static/css/app.css?v=15">
 </head>
 <body>
   <div class="app">
@@ -151,8 +151,14 @@
     <div class="result-actions" id="resultActions"></div>
   </div>
 
+  <!-- Points at the video-size button while editing -->
+  <div class="size-hint" id="sizeHint" hidden>
+    <span class="hint-arrow">⬅</span>
+    <span class="hint-text"><b>Tap to resize the video</b>Smaller while you edit, bigger to watch your edits in action</span>
+  </div>
+
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=13"></script>
+  <script type="module" src="/static/js/app.js?v=15"></script>
 </body>
 </html>
