@@ -70,7 +70,7 @@ def status():
     return {
         "transcription": config.TRANSCRIBE_PROVIDER,
         "transcriptionReady": config.TRANSCRIBE_PROVIDER == "local" or bool(config.OPENAI_API_KEY),
-        "pexels": bool(config.PEXELS_API_KEY),
+        "stock": config.STOCK_ENABLED,
         "claude": bool(config.ANTHROPIC_API_KEY),
     }
 

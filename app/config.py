@@ -24,6 +24,8 @@ LOCAL_WHISPER_MODEL = os.environ.get("LOCAL_WHISPER_MODEL", "base.en")
 
 # B-roll: Pexels (free licensed stock video). Claude picks smarter moments/search terms if set.
 PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "")
+PIXABAY_API_KEY = os.environ.get("PIXABAY_API_KEY", "")
+STOCK_ENABLED = bool(PEXELS_API_KEY or PIXABAY_API_KEY)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5-5")
 

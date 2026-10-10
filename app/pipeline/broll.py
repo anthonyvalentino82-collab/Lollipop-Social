@@ -1,5 +1,5 @@
 """Auto B-roll: choose moments from the transcript, then fetch matching footage
-from your own uploaded clips or from Pexels (free, licensed for commercial use)."""
+from your own uploaded clips or from Pexels / Pixabay (free, licensed for commercial use)."""
 import json
 import re
 import uuid
@@ -124,8 +124,21 @@ def _non_overlapping(moments):
     return out
 
 
-def search_pexels(query: str, exclude: set[int] = frozenset()) -> dict | None:
-    """Best portrait HD clip for `query`. Returns {id, url, link, credit} or None."""
+def search_stock(query: str, exclude: set[str] = frozenset()) -> dict | None:
+    """Best clip for `query` from Pexels and/or Pixabay (whichever keys are set).
+    Returns {id, url, link, credit} or None. Ids look like "pexels:123" / "pixabay:456"."""
+    for search in (_search_pexels, _search_pixabay):
+        try:
+            hit = search(query, exclude)
+        except httpx.HTTPError as exc:
+            print(f"[broll] {search.__name__} failed: {exc}")
+            hit = None
+        if hit:
+            return hit
+    return None
+
+
+def _search_pexels(query: str, exclude: set[str]) -> dict | None:
     if not config.PEXELS_API_KEY:
         return None
     r = httpx.get("https://api.pexels.com/videos/search",
@@ -133,7 +146,8 @@ def search_pexels(query: str, exclude: set[int] = frozenset()) -> dict | None:
                   headers={"Authorization": config.PEXELS_API_KEY}, timeout=30)
     r.raise_for_status()
     for video in r.json().get("videos", []):
-        if video["id"] in exclude or video.get("duration", 0) < 2:
+        sid = f"pexels:{video['id']}"
+        if sid in exclude or video.get("duration", 0) < 2:
             continue
         files = [f for f in video.get("video_files", [])
                  if f.get("file_type") == "video/mp4" and f.get("height") and f.get("width")
@@ -141,9 +155,43 @@ def search_pexels(query: str, exclude: set[int] = frozenset()) -> dict | None:
         if not files:
             continue
         best = min(files, key=lambda f: abs(f["height"] - 1920))
-        return {"id": video["id"], "url": best["link"], "link": video.get("url", ""),
+        return {"id": sid, "url": best["link"], "link": video.get("url", ""),
                 "credit": f'Video by {video.get("user", {}).get("name", "Pexels")} on Pexels'}
     return None
+
+
+def _search_pixabay(query: str, exclude: set[str]) -> dict | None:
+    """Pixabay has few vertical clips, so we take HD landscape ones too; they are
+    centre-cropped to 9:16 when prepared."""
+    if not config.PIXABAY_API_KEY:
+        return None
+    r = httpx.get("https://pixabay.com/api/videos/",
+                  params={"key": config.PIXABAY_API_KEY, "q": query[:100], "per_page": 20,
+                          "safesearch": "true", "video_type": "film"}, timeout=30)
+    r.raise_for_status()
+    candidates = []
+    for hit in r.json().get("hits", []):
+        sid = f"pixabay:{hit['id']}"
+        if sid in exclude or hit.get("duration", 0) < 2:
+            continue
+        sizes = [v for v in (hit.get("videos") or {}).values() if v.get("url") and v.get("height")]
+        if not sizes:
+            continue
+        # After cropping to 9:16 the frame must still be sharp at 1080x1920:
+        # vertical clips need ~1080 px width, landscape ones ~1440 px height.
+        sharp = lambda v: v["width"] >= 1080 if v["height"] >= v["width"] else v["height"] >= 1440
+        area = lambda v: v["width"] * v["height"]
+        good = [v for v in sizes if sharp(v)]
+        best = min(good, key=area) if good else max(sizes, key=area)
+        if min(best["width"], best["height"]) < 720:
+            continue
+        portrait = best["height"] >= best["width"]
+        candidates.append((0 if portrait else 1, {
+            "id": sid, "url": best["url"], "link": hit.get("pageURL", ""),
+            "credit": f'Video by {hit.get("user", "Pixabay")} on Pixabay'}))
+    if not candidates:
+        return None
+    return min(candidates, key=lambda c: c[0])[1]  # prefer vertical, keep Pixabay's relevance order
 
 
 def prepare_clip(src: Path, dst: Path, length: float) -> None:
@@ -155,7 +203,7 @@ def prepare_clip(src: Path, dst: Path, length: float) -> None:
 
 
 def fetch_moment(moment: dict, project_dir: Path, user_clips: dict[str, Path],
-                 exclude: set[int] = frozenset()) -> dict | None:
+                 exclude: set[str] = frozenset()) -> dict | None:
     """Materialise one moment into a ready-to-render B-roll entry."""
     bdir = project_dir / "broll"
     bdir.mkdir(exist_ok=True)
@@ -167,7 +215,7 @@ def fetch_moment(moment: dict, project_dir: Path, user_clips: dict[str, Path],
         prepare_clip(user_clips[moment["clip_tag"]], bdir / f"{bid}.mp4", length + 0.5)
         entry.update(source="mine", credit="Your clip", query=moment["clip_tag"])
     else:
-        hit = search_pexels(moment["query"], exclude)
+        hit = search_stock(moment["query"], exclude)
         if not hit:
             return None
         raw = bdir / f"{bid}_src.mp4"
@@ -178,6 +226,6 @@ def fetch_moment(moment: dict, project_dir: Path, user_clips: dict[str, Path],
                     fh.write(chunk)
         prepare_clip(raw, bdir / f"{bid}.mp4", length + 0.5)
         raw.unlink(missing_ok=True)
-        entry.update(source="pexels", pexels_id=hit["id"], credit=hit["credit"], link=hit["link"])
+        entry.update(source="stock", stock_id=hit["id"], credit=hit["credit"], link=hit["link"])
     thumbnail(bdir / f"{bid}.mp4", bdir / f"{bid}.jpg", t=0.3, width=200)
     return entry

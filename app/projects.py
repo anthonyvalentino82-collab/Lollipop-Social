@@ -232,23 +232,23 @@ def auto_edit(pid: str, progress) -> dict:
     progress(0.65, "Choosing B-roll")
     broll = []
     clips = {c["tag"]: config.CLIPS_DIR / c["file"] for c in list_clips()}
-    if not config.PEXELS_API_KEY and not clips:
-        warnings.append("B-roll: add a PEXELS_API_KEY or upload your own clips to enable it.")
+    if not config.STOCK_ENABLED and not clips:
+        warnings.append("B-roll: add a PIXABAY_API_KEY (or PEXELS_API_KEY) or upload your own clips to enable it.")
     elif lines:
         trimmed = [l for l in lines if l["start"] >= p["trim"]["start"] and l["end"] <= p["trim"]["end"]]
         moments, method = broll_mod.plan_moments(trimmed, p["trim"]["end"] - p["trim"]["start"], list(clips))
-        used: set[int] = set()
+        used: set[str] = set()
         for k, m in enumerate(moments):
             progress(0.7 + 0.25 * k / max(1, len(moments)), f"Downloading B-roll: {m['query']}")
             try:
                 if m.get("clip_tag") and m["clip_tag"] not in clips:
                     m["clip_tag"] = ""
-                if not m.get("clip_tag") and not config.PEXELS_API_KEY:
+                if not m.get("clip_tag") and not config.STOCK_ENABLED:
                     continue
                 entry = broll_mod.fetch_moment(m, d, clips, used)
                 if entry:
                     entry["method"] = method
-                    used.add(entry.get("pexels_id", -1))
+                    used.add(entry.get("stock_id", ""))
                     broll.append(entry)
             except Exception as exc:
                 warnings.append(f"B-roll '{m['query']}' failed: {exc}")
@@ -270,17 +270,17 @@ def auto_edit(pid: str, progress) -> dict:
 
 
 def swap_broll(pid: str, bid: str, progress) -> dict:
-    """Replace one B-roll clip with the next-best Pexels result."""
+    """Replace one B-roll clip with the next-best stock result."""
     d = pdir(pid)
     p = load(pid)
     b = next(x for x in p["broll"] if x["id"] == bid)
     progress(0.2, f"Finding another clip for “{b['query']}”")
-    exclude = set(b.get("tried", [])) | {b.get("pexels_id", -1)}
+    exclude = set(b.get("tried", [])) | {b.get("stock_id", "")}
     entry = broll_mod.fetch_moment({"start": b["start"], "end": b["end"], "query": b["query"]},
                                    d, {}, exclude)
     if not entry:
         raise RuntimeError("No other clips found for that topic.")
-    entry["tried"] = sorted(exclude | {entry.get("pexels_id", -1)})
+    entry["tried"] = sorted(exclude | {entry.get("stock_id", "")})
     with _lock:
         p = load(pid)
         p["broll"] = [entry if x["id"] == bid else x for x in p["broll"]]

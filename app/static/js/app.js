@@ -297,7 +297,7 @@ function renderBroll() {
   $("brollStrip").hidden = false;
   if (!(p.broll || []).length) {
     list.append(el("div", { class: "broll-empty" },
-      state.status?.pexels ? "No B-roll moments found in this video." : "B-roll is off — add a Pexels key or upload your own clips (My clips)."));
+      state.status?.stock ? "No B-roll moments found in this video." : "B-roll is off — add a Pixabay key or upload your own clips (My clips)."));
     return;
   }
   const base = `/files/projects/${p.id}`;
@@ -311,7 +311,7 @@ function renderBroll() {
         b.removed
           ? el("button", { class: "keep", onclick: () => { b.removed = false; save(["broll"]); renderBroll(); } }, "Keep")
           : el("button", { class: "remove", onclick: () => { b.removed = true; save(["broll"]); renderBroll(); } }, "Remove"),
-        b.source === "pexels" ? el("button", { onclick: () => swapBroll(b) }, "Swap") : null)));
+        b.source === "stock" ? el("button", { onclick: () => swapBroll(b) }, "Swap") : null)));
   }
 }
 
@@ -606,7 +606,7 @@ function clipsSheet() {
     } catch (e) { busy(null); toast(e.message); }
   });
   return [
-    el("p", { class: "note" }, "Upload your own footage and give it a topic. When you mention that topic in a video, Auto Edit uses your clip as B-roll. Otherwise it picks licensed stock footage from Pexels."),
+    el("p", { class: "note" }, "Upload your own footage and give it a topic. When you mention that topic in a video, Auto Edit uses your clip as B-roll. Otherwise it picks licensed stock footage (Pixabay / Pexels)."),
     el("div", { class: "field" }, el("label", { class: "label" }, "Topic"), tag),
     el("label", { class: "small-btn wide" }, inp, "+ Upload clip"),
     ...clips.map((c) => el("div", { class: "row" }, el("span", {}, `🎬 ${c.tag}`),

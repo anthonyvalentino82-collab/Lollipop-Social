@@ -12,12 +12,12 @@ You'll create a few free accounts, copy some secret keys, and paste them into a 
 |---|---|---|
 | **Render.com** | The computer in the cloud that runs your app and builds your videos | about **$25–28/month** |
 | **OpenAI** | Listens to your video and writes the captions | about **$0.006 per minute** of video (a 1-minute video costs less than 1 cent) |
-| **Pexels** | Free stock video library used for Auto B-roll | **Free** |
+| **Pixabay** | Free stock video library used for Auto B-roll | **Free** |
 | **Anthropic (Claude)** — *optional* | Picks better B-roll moments and search words | about **1–2 cents per video** |
 
 Everything else runs inside your app at no extra cost: the AI person cut-out for the headline, face tracking for zoom, audio cleanup, and the video encoder.
 
-**Nothing paid is switched on until you add its key.** Without an OpenAI key, captions use a free transcriber built into the app. It's slower and needs the bigger Render plan. Without a Pexels key, B-roll only uses clips you upload yourself.
+**Nothing paid is switched on until you add its key.** Without an OpenAI key, captions use a free transcriber built into the app. It's slower and needs the bigger Render plan. Without a Pixabay key, B-roll only uses clips you upload yourself.
 
 ---
 
@@ -29,10 +29,13 @@ Everything else runs inside your app at no extra cost: the AI person cut-out for
 3. Click **API keys → Create new secret key**. Name it "LolliPOP" and copy the key (it starts with `sk-`).
    You only see the key once, so paste it into your note right away.
 
-### 1b. Pexels key (for B-roll — free)
-1. Go to **pexels.com/api** and click **Get Started** (create a free account).
-2. Fill in the short form (description: "Personal video editing app").
-3. Copy the API key shown on the page.
+### 1b. Pixabay key (for B-roll — free)
+1. Go to **pixabay.com** and tap **Join** to create a free account (or log in).
+2. Go to **pixabay.com/api/docs**.
+3. Scroll down to the **Parameters** section. Your key appears there in green, next to the word `key` (a long mix of numbers and letters).
+4. Copy it into your note.
+
+*(Pexels also works, if you already have a Pexels key. Pexels has paused new keys for now.)*
 
 ### 1c. (Optional) Anthropic key (smarter B-roll picks)
 1. Go to **console.anthropic.com** and sign up.
@@ -54,10 +57,11 @@ The code lives in your GitHub repository **lollipop-social**. If Claude pushed i
 2. When Render asks, allow it to see your **lollipop-social** repository.
 3. In the Render dashboard, click **New + → Blueprint**.
 4. Pick the **lollipop-social** repository (and the branch from Step 2). Render reads the `render.yaml` file and sets everything up.
-5. Render asks for 4 values. Paste the keys from Step 1:
+5. Render asks for a few values. Paste the keys from Step 1:
    - `APP_PASSWORD`: your password
    - `OPENAI_API_KEY`: your OpenAI key
-   - `PEXELS_API_KEY`: your Pexels key
+   - `PIXABAY_API_KEY`: your Pixabay key
+   - `PEXELS_API_KEY`: leave blank (unless you have one)
    - `ANTHROPIC_API_KEY`: your Anthropic key, or leave it blank
 6. Click **Apply** or **Create**. The first build takes about 10–15 minutes. When the status says **Live**, you're done.
 7. At the top of the page, Render shows your app's address, for example `https://lollipop-social.onrender.com`.
@@ -103,7 +107,7 @@ You now have a LolliPOP icon that opens the app full-screen, like a normal app.
 ---
 
 ## Licensing — what you're allowed to do
-- **Pexels B-roll:** free for commercial use and no credit required. You may not imply that the people in the footage endorse your business, and you may not resell the clips on their own.
+- **Pixabay / Pexels B-roll:** free for commercial use and no credit required. You may not imply that the people in the footage endorse your business, and you may not resell the clips on their own.
 - **Music:** you must own or license any music you add. Songs bought or streamed on Apple Music/Spotify can't be loaded (they're copy-protected), and Instagram or TikTok may mute copyrighted songs. Use royalty-free music, for example from **pixabay.com/music** (free) or **Artlist/Epidemic Sound** (paid subscriptions).
 - **Fonts** (Anton, Montserrat, etc.): Open Font License, free to use in videos.
 - **AI models and ffmpeg:** open source (Apache 2.0 / LGPL / GPL). Free to use for your own app.
@@ -112,7 +116,7 @@ You now have a LolliPOP icon that opens the app full-screen, like a normal app.
 
 ## Troubleshooting
 - **"Captions: transcription failed"**: your OpenAI key is missing, mistyped or out of credit. Check Render → Environment, and OpenAI → Billing.
-- **"B-roll: add a PEXELS_API_KEY…"**: add the Pexels key in Render → Environment.
+- **"B-roll: add a PIXABAY_API_KEY…"**: add the Pixabay key in Render → Environment.
 - **The app asks for the password again**: that's normal after clearing Safari data.
 - **Upload is slow**: record at 1080p/30fps instead of 4K.
 - **Something else**: Render dashboard → your service → **Logs** shows what happened. Copy the last red lines and paste them to Claude.

@@ -14,7 +14,7 @@
 | Cinematic headline | Static text you type, drawn **behind** your head and body with AI person segmentation; `*stars*` mark accent words | Google MediaPipe, runs on the server and in the browser preview |
 | Auto zoom | Eased push-ins on emphasized words (loudness + pauses + sentence starts); the face stays framed by face tracking | MediaPipe face detector |
 | Auto audio | High-pass, FFT noise reduction, presence EQ, compression, −16 LUFS loudness | ffmpeg |
-| Auto B-roll | Picks moments from the transcript and fetches portrait stock footage (or your own tagged clips); your voice keeps playing | Pexels (+ optional Claude for picking moments) |
+| Auto B-roll | Picks moments from the transcript and fetches portrait stock footage (or your own tagged clips); your voice keeps playing | Pixabay and/or Pexels (+ optional Claude for picking moments) |
 | Music | Your audio file, looped, faded, and **ducked under your voice** with a sidechain compressor; volume control | ffmpeg |
 
 Export: **1080×1920, 30 fps, H.264 High / AAC MP4** with faststart. It's ready for Photos, iMessage, Instagram, TikTok, Facebook, LinkedIn and YouTube Shorts. The headline and captions are separate layers in both the preview and the export.
@@ -31,7 +31,7 @@ One screen: preview · **TRIM | CAPTIONS | HEADLINE | LOGO | MUSIC | ZOOM** · *
   - `transcribe.py`: OpenAI / local transcription
   - `vision.py`: segmentation and face tracking
   - `zoom.py`: emphasis → zoom plan
-  - `broll.py`: moments, Pexels, user clips
+  - `broll.py`: moments, Pixabay/Pexels, user clips
   - `text.py`: headline and caption drawing
   - `timeline.py`: shared timing math
   - `render.py`: frame compositor → MP4
