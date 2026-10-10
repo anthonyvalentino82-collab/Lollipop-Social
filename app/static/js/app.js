@@ -886,7 +886,8 @@ function headlineSheet() {
     toggle("Show headline", !!h.enabled, (v) => { h.enabled = v; changed(); }),
     el("div", { class: "field" }, el("label", { class: "label" }, "Headline text"), ta,
       el("p", { class: "note" }, "This stays on screen the whole video. Put *stars* around words to color them. Press return for a new line.")),
-    toggle("Place behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); }),
+    toggle("Place behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); refreshSheet(); }),
+    h.behind !== false ? toggle("Extra-sharp cut-out (slower save)", h.cutout === "best", (v) => { h.cutout = v ? "best" : "sharp"; changed(); }) : null,
     el("p", { class: "note" }, "Drag the headline on the preview to move it. Pinch to resize."),
     fontPicker("Font", FONTS_HEADLINE, h.font, (v) => { h.font = v; changed(); }),
     slider("Size", { min: 50, max: 320, value: h.size || 150, oninput: (v) => { h.size = v; changed(); } }),
@@ -1114,7 +1115,8 @@ function headlineStep() {
     swatches("Headline color", null, h.color, (v) => { h.color = v; changed(); }),
     swatches("*Starred* word color", null, h.accent, (v) => { h.accent = v; changed(); }),
     fontPicker("Or choose a font", FONTS_HEADLINE, h.font, (v) => { h.font = v; changed(); }),
-    toggle("Place behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); }),
+    toggle("Place behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); refreshSheet(); }),
+    h.behind !== false ? toggle("Extra-sharp cut-out (slower save)", h.cutout === "best", (v) => { h.cutout = v ? "best" : "sharp"; changed(); }) : null,
     el("p", { class: "note" }, "Tip: drag the headline on the preview to move it, pinch to resize."),
   ];
 }

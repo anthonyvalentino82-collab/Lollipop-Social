@@ -18,7 +18,7 @@ async function load() {
 export class PersonMasker {
   constructor() {
     this.input = document.createElement("canvas");
-    this.input.width = 180; this.input.height = 320;
+    this.input.width = 256; this.input.height = 256; // square, like the model
     this.ictx = this.input.getContext("2d", { willReadFrequently: true });
     this.mask = document.createElement("canvas");
     this.mctx = this.mask.getContext("2d");
@@ -43,9 +43,12 @@ export class PersonMasker {
   reset() { this.prev = null; }
 
   // `source` is a canvas holding exactly the frame that is on screen.
-  update(source) {
+  // rect = {x, y, s}: the square part of `source` to cut out (around the headline).
+  update(source, rect) {
     if (!this.ready) return false;
-    this.ictx.drawImage(source, 0, 0, this.input.width, this.input.height);
+    const r = rect || { x: 0, y: 0, s: Math.min(source.width, source.height) };
+    this.rect = r;
+    this.ictx.drawImage(source, r.x, r.y, r.s, r.s, 0, 0, this.input.width, this.input.height);
     const ts = Math.max(this.lastTs + 1, performance.now());
     this.lastTs = ts;
     try {

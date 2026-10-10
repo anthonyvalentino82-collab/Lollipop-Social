@@ -132,7 +132,8 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
     track = project.get("faceTrack", [])
     broll = [b for b in project.get("broll", []) if not b.get("removed")]
     behind = head.get("behind", True)
-    seg = PersonSegmenter() if head_np is not None and behind else None
+    seg = PersonSegmenter("best" if head.get("cutout") == "best" else "sharp") \
+        if head_np is not None and behind else None
 
     # ---- encoder ----
     enc = subprocess.Popen(

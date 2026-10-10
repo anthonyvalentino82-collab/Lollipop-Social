@@ -206,12 +206,19 @@ export class Preview {
         if (behind) {
           this.pctx.globalCompositeOperation = "copy";
           this.pctx.drawImage(video, x, y, w, h, 0, 0, CW, CH);
+          // Square crop around the headline (same trick as the export) = sharper edges.
+          const hb = this.lastHeadBox || [0, 0, OW, OH * 0.6];
+          const kx = this.k;
+          const side = Math.min(CW, CH, Math.max(hb[2] - hb[0], hb[3] - hb[1]) * 1.1 * kx);
+          const cx = (hb[0] + hb[2]) / 2 * kx, cy = (hb[1] + hb[3]) / 2 * kx;
+          const rect = { x: Math.max(0, Math.min(CW - side, cx - side / 2)), y: Math.max(0, Math.min(CH - side, cy - side / 2)), s: side };
           if (fresh || video.paused || this.frameNo % 2 === 0) {
             if (fresh) this.masker.reset();
-            this.masker.update(this.person);
+            this.masker.update(this.person, rect);
           }
           this.pctx.globalCompositeOperation = "destination-in";
-          if (this.masker.mask.width > 1) this.pctx.drawImage(this.masker.mask, 0, 0, CW, CH);
+          const mr = this.masker.rect || rect;
+          if (this.masker.mask.width > 1) this.pctx.drawImage(this.masker.mask, mr.x, mr.y, mr.s, mr.s);
         }
         this.drawHeadline(p.headline);
         if (behind) ctx.drawImage(this.person, 0, 0);
@@ -301,6 +308,7 @@ export class Preview {
       size * (h.lineHeight || 0.95), [h.color || "#E9E1D3", h.accent || "#D7262E"]);
     this.ctx.globalAlpha = 1;
     this.boxes.headline = box.map((v) => v / k);
+    this.lastHeadBox = this.boxes.headline;
   }
 
   drawCaption(style, { line, active, since }, ghost) {
