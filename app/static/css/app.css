@@ -230,7 +230,12 @@ textarea:focus, input:focus { outline: 2px solid rgba(227,32,42,.6); border-colo
 .music-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* export sheet */
-.export-video { width: 100%; max-height: 38svh; border-radius: 14px; background: #000; }
+.export-video { display: block; width: 100%; height: 100%; max-height: 100%; border-radius: 14px; background: #000; object-fit: contain; }
+.sheet.tall { max-height: none; top: calc(env(safe-area-inset-top, 0px) + 8px); border-radius: 22px 22px 0 0; }
+.sheet.tall .sheet-body { flex: 1; min-height: 0; overflow: hidden; }
+.sheet.tall .sheet-body > .export-video { flex: 1 1 auto; min-height: 0; }
+.sheet.tall .sheet-foot { gap: 8px; }
+.note.center { text-align: center; }
 
 /* login */
 .login {
@@ -312,3 +317,4 @@ details.fix .cap-lines { margin-top: 8px; }
 .btn-save.ready { animation: pulse 1.6s ease-in-out 3; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(242,194,48,.35); } }
 .pp-btn { width: 46px; height: 46px; }
+a.small-btn { color: var(--text); text-decoration: none; }

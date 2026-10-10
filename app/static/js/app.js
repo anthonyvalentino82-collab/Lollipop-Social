@@ -374,21 +374,27 @@ function showExport(blob, url) {
   state.exportUrl = blob ? URL.createObjectURL(blob) : null;
   const file = blob ? new File([blob], "lollipop-video.mp4", { type: "video/mp4" }) : null;
   const canShare = !!(file && navigator.canShare && navigator.canShare({ files: [file] }));
-  openSheet("export", "Your video is ready", [
-    el("video", { class: "export-video", src: state.exportUrl || url, controls: true, playsinline: true }),
-    canShare
-      ? el("button", {
-          class: "btn btn-primary", onclick: async () => {
-            try { await navigator.share({ files: [file] }); }
-            catch (e) { if (e.name !== "AbortError") toast("Sharing didn't open — use “Open video” below instead.", 5000); }
-          },
-        }, "Save to iPhone / Share")
-      : null,
-    el("p", { class: "note" }, canShare
-      ? "Tap “Save to iPhone / Share”, then choose “Save Video” to put it in Photos — or send it straight to Messages, Instagram, TikTok, Facebook, LinkedIn or YouTube."
-      : "Tap “Open video”, then the Share button (square with arrow) → “Save Video”, or download it."),
-    el("a", { class: "small-btn wide", href: url, target: "_blank", rel: "noopener" }, "Open video"),
-  ]);
+  state.wizard = null;
+  // Full-screen panel: video on top, Save button pinned at the bottom so it's always visible.
+  renderSheet({
+    key: "export", title: "Your video is ready ✨",
+    content: [el("video", { class: "export-video", src: state.exportUrl || url, controls: true, playsinline: true })],
+    footer: [
+      canShare
+        ? el("button", {
+            class: "btn btn-primary", onclick: async () => {
+              try { await navigator.share({ files: [file] }); }
+              catch (e) { if (e.name !== "AbortError") toast("Sharing didn't open — use “Open video” instead.", 5000); }
+            },
+          }, "Save to iPhone / Share")
+        : null,
+      el("p", { class: "note center" }, canShare
+        ? "Then choose “Save Video” for Photos — or send to Messages, Instagram, TikTok, Facebook, LinkedIn or YouTube."
+        : "Tap “Open video”, then Share (square with arrow) → “Save Video”."),
+      el("a", { class: "small-btn wide", href: url, target: "_blank", rel: "noopener" }, "Open video"),
+    ],
+  });
+  $("sheet").classList.add("tall");
 }
 
 // ---------- b-roll ----------
@@ -450,6 +456,7 @@ const BUILDERS = { trim: () => trimSheet(), captions: () => captionsSheet(), hea
 
 function renderSheet({ key, title, step, content, footer }) {
   state.sheet = key;
+  $("sheet").classList.remove("tall");
   $("sheetTitle").textContent = title || "";
   $("sheetStep").hidden = !step;
   $("sheetStep").textContent = step || "";
