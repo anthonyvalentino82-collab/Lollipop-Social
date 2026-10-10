@@ -613,14 +613,30 @@ function chips(label, options, current, onpick) {
   draw(current);
   return el("div", { class: "field" }, label ? el("label", { class: "label" }, label) : null, wrap);
 }
-function swatches(label, colors, current, onpick) {
+// 10 ready-made colors + a color wheel for any custom color.
+const PALETTE = ["#FFFFFF", "#E9E1D3", "#E3202A", "#F2C230", "#FF7A1A", "#FF3D8B", "#8B5CF6", "#2F80ED", "#14B8A6", "#22C55E"];
+function swatches(label, _colors, current, onpick) {
   const wrap = el("div", { class: "swatches" });
+  const preview = el("span", { class: "color-now" });
   const draw = (cur) => {
     wrap.innerHTML = "";
-    for (const c of colors) wrap.append(el("button", { class: `swatch${c.toLowerCase() === (cur || "").toLowerCase() ? " on" : ""}`, style: `background:${c}`, onclick: () => { onpick(c); draw(c); } }));
+    const c0 = (cur || "").toUpperCase();
+    for (const c of PALETTE) {
+      wrap.append(el("button", { class: `swatch${c === c0 ? " on" : ""}`, style: `background:${c}`, "aria-label": c,
+        onclick: () => { onpick(c); draw(c); } }));
+    }
+    // Color wheel: the native iPhone color picker (grid / spectrum / sliders).
+    const custom = !PALETTE.includes(c0) && c0;
+    const inp = el("input", { type: "color", value: /^#[0-9A-F]{6}$/.test(c0) ? c0.toLowerCase() : "#ffffff" });
+    inp.addEventListener("input", () => { onpick(inp.value.toUpperCase()); preview.style.background = inp.value; });
+    inp.addEventListener("change", () => draw(inp.value.toUpperCase()));
+    wrap.append(el("label", { class: `swatch wheel${custom ? " on" : ""}`, title: "Pick any color",
+      style: custom ? `--custom:${c0}` : "" }, inp));
+    preview.style.background = cur || "#FFFFFF";
   };
   draw(current);
-  return el("div", { class: "field" }, el("label", { class: "label" }, label), wrap);
+  return el("div", { class: "field" },
+    el("div", { class: "row" }, el("label", { class: "label" }, label), preview), wrap);
 }
 
 // ----- TRIM (filmstrip with draggable handles) -----
@@ -1039,6 +1055,8 @@ function headlineStep() {
       onpick: () => { Object.assign(h, { font: pr.font, color: pr.color, accent: pr.accent }); changed(); refreshSheet(); },
     }))),
     slider("Size", { min: 50, max: 320, value: h.size || 130, oninput: (v) => { h.size = v; changed(); } }),
+    swatches("Headline color", null, h.color, (v) => { h.color = v; changed(); }),
+    swatches("*Starred* word color", null, h.accent, (v) => { h.accent = v; changed(); }),
     fontPicker("Or choose a font", FONTS_HEADLINE, h.font, (v) => { h.font = v; changed(); }),
     toggle("Place behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); }),
     el("p", { class: "note" }, "Tip: drag the headline on the preview to move it, pinch to resize."),
