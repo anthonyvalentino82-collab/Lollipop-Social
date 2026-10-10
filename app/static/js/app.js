@@ -504,6 +504,7 @@ function showExport(blob, url) {
 
 // Instagram / TikTok / Facebook bubbles: save the video, then jump into the app.
 const SOCIAL = [
+  { name: "Messages", icon: "/icons/messages.png", text: true },
   { name: "Instagram", icon: "/icons/instagram.png", app: "instagram://camera", web: "https://www.instagram.com/" },
   { name: "TikTok", icon: "/icons/tiktok.png", app: "snssdk1233://", web: "https://www.tiktok.com/upload" },
   { name: "Facebook", icon: "/icons/facebook.png", app: "fb://", web: "https://www.facebook.com/" },
@@ -518,6 +519,17 @@ function socialBubbles(file, url, player) {
 }
 async function postTo(s, file, url, player) {
   player.pause();
+  // Messages: a web page can't attach a video to an sms: link, so the iPhone share
+  // sheet is the way in — the video arrives already attached, ready to text.
+  if (s.text) {
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      toast("Tap “Messages” to text your video", 2200);
+      try { await navigator.share({ files: [file] }); } catch (e) { /* closed the sheet */ }
+    } else {
+      window.location.href = `sms:&body=${encodeURIComponent("Check out my video: " + new URL(url, location.href).href)}`;
+    }
+    return;
+  }
   // a) Save the video. On the web, the iPhone share sheet is the only way to get it into Photos.
   let saved = false;
   if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
