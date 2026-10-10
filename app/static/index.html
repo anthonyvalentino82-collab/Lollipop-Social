@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
   <link rel="icon" href="/static/brand/favicon.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=7">
+  <link rel="stylesheet" href="/static/css/app.css?v=8">
 </head>
 <body>
   <div class="app">
@@ -131,8 +131,18 @@
     <div class="login-err" id="loginErr"></div>
   </div>
 
+  <!-- Finished video: its own full screen -->
+  <div class="result" id="result" hidden>
+    <div class="result-top">
+      <button class="link" id="resultBack">‹ Back to editing</button>
+      <span class="result-title">Your video ✨</span>
+    </div>
+    <div class="result-video"><video id="resultVideo" playsinline controls></video></div>
+    <div class="result-actions" id="resultActions"></div>
+  </div>
+
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=7"></script>
+  <script type="module" src="/static/js/app.js?v=8"></script>
 </body>
 </html>
