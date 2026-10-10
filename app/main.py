@@ -219,6 +219,20 @@ def put_project(pid: str, patch: dict = Body(...)):
     return projects.update(pid, patch)
 
 
+@app.get("/api/projects/{pid}/poster")
+def poster(pid: str):
+    """Sharp first frame shown in the preview until the video itself has loaded."""
+    p = _project_or_404(pid)
+    d = projects.pdir(pid)
+    f = d / "poster.jpg"
+    if not f.exists():
+        if p.get("status") != "ready":
+            raise HTTPException(409, "The video is still being prepared.")
+        from .pipeline import media
+        media.thumbnail(d / "source.mp4", f, t=0.05, width=720)
+    return FileResponse(f, headers={"Cache-Control": "max-age=86400"})
+
+
 @app.get("/api/projects/{pid}/filmstrip")
 def filmstrip(pid: str):
     """Thumbnail strip for the trim bar (made on first request for older projects)."""

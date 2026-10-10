@@ -32,6 +32,12 @@ export class Preview {
     const redraw = () => this.draw(true);
     video.addEventListener("seeked", redraw);
     video.addEventListener("loadeddata", redraw);
+    // iPhone Safari often won't decode a frame until something asks for one: nudge it with a
+    // tiny seek once the video's size is known, so the preview shows a picture without pressing play.
+    video.addEventListener("loadedmetadata", () => {
+      if (video.paused && this.p) video.currentTime = Math.max(0.01, (this.p.trim?.start || 0) + 0.01);
+      redraw();
+    });
     video.addEventListener("play", () => this.loop());
     video.addEventListener("pause", () => { this.syncMusic(); this.draw(true); });
     this.bindGestures();
@@ -178,7 +184,8 @@ export class Preview {
 
   draw(fresh = false) {
     const { ctx, CW, CH, video, p } = this;
-    if (!p || !p.source || !video.videoWidth) return;
+    if (!p || !p.source) return;
+    if (!video.videoWidth || video.readyState < 2) { this.drawPoster(); return; }
     const t = video.currentTime;
     this.onTime && this.onTime(t);
     this.frameNo++;
@@ -242,6 +249,25 @@ export class Preview {
     }
     if (p.logo && p.logo.enabled && this.logoImg && this.logoImg.naturalWidth) this.drawLogo(p.logo);
     this.drawSelection();
+  }
+
+  // Still frame from the server, shown until the video has a frame ready.
+  setPoster(url) {
+    this.posterImg = null;
+    if (!url) return;
+    const img = new Image();
+    img.onload = () => { this.posterImg = img; this.draw(); };
+    img.src = url;
+  }
+
+  drawPoster() {
+    const img = this.posterImg;
+    if (!img) return;
+    const { ctx, CW, CH } = this;
+    const s = Math.max(CW / img.width, CH / img.height);
+    const w = CW / s, h = CH / s;
+    ctx.clearRect(0, 0, CW, CH);
+    ctx.drawImage(img, (img.width - w) / 2, (img.height - h) / 2, w, h, 0, 0, CW, CH);
   }
 
   drawCover(media) {

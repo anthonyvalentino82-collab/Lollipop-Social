@@ -321,6 +321,7 @@ async function openProject(p) {
     video.load();
   }
   preview.setProject(p);
+  preview.setPoster(`/api/projects/${p.id}/poster`);
   preview.setLogo(logoUrl(p.logo.id));
   preview.setBroll(p.broll || [], base);
   preview.setMusic(p.music?.file ? `${base}/${p.music.file}?v=${encodeURIComponent(p.music.name || "")}` : null);
