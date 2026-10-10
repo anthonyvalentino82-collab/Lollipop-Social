@@ -49,7 +49,8 @@ class PersonSegmenter:
         self._seg.close()
 
 
-def face_track(video: Path, width: int, height: int, duration: float, step: float = 0.25) -> list:
+def face_track(video: Path, width: int, height: int, duration: float, step: float = 0.25,
+               on_progress=lambda f: None) -> list:
     """[[t, x, y], ...] normalised face centre sampled every `step` seconds and smoothed."""
     det = vision.FaceDetector.create_from_options(vision.FaceDetectorOptions(
         base_options=BaseOptions(model_asset_path=str(config.MODELS_DIR / "blaze_face_short_range.tflite")),
@@ -76,6 +77,8 @@ def face_track(video: Path, width: int, height: int, duration: float, step: floa
         else:
             raw.append((i * step, None, None))
         i += 1
+        if duration > 0 and i % 8 == 0:
+            on_progress(min(1.0, i * step / duration))
     proc.wait()
     det.close()
     return _smooth(raw)

@@ -51,12 +51,17 @@
 
         <div class="busy" id="busy" hidden>
           <div class="spinner"></div>
+          <div class="busy-pct" id="busyPct">0%</div>
           <div class="busy-msg" id="busyMsg">Working…</div>
           <div class="bar"><div class="bar-fill" id="busyBar"></div></div>
         </div>
       </div>
 
       <div class="scrub" id="scrub" hidden>
+        <button class="pp-btn" id="ppBtn" aria-label="Play">
+          <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+        </button>
         <span id="tCur">0:00</span>
         <input type="range" id="seek" min="0" max="1000" value="0">
         <span id="tDur">0:00</span>

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .media import run
+from .media import run, run_with_progress
 
 # Rumble cut -> FFT noise reduction -> presence boost for clarity -> gentle
 # compression -> broadcast loudness (-16 LUFS, the level social apps expect).
@@ -18,10 +18,10 @@ VOICE_CHAIN = ",".join([
 ])
 
 
-def clean_voice(src: Path, dst: Path) -> None:
+def clean_voice(src: Path, dst: Path, duration: float = 0, on_progress=lambda f: None) -> None:
     """Writes a cleaned, loudness-balanced 48 kHz stereo WAV of the whole source."""
-    run(["ffmpeg", "-y", "-i", str(src), "-vn", "-af", VOICE_CHAIN,
-         "-ar", "48000", "-ac", "2", str(dst)])
+    run_with_progress(["ffmpeg", "-y", "-i", str(src), "-vn", "-af", VOICE_CHAIN,
+                       "-ar", "48000", "-ac", "2", str(dst)], duration, on_progress)
 
 
 def mix_final(voice: Path, dst: Path, start: float, end: float,

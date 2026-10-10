@@ -79,7 +79,12 @@ async function waitJob(job, onProgress) {
 
 function busy(msg, p) {
   $("busy").hidden = msg == null;
-  if (msg != null) { $("busyMsg").textContent = msg; $("busyBar").style.width = `${Math.round((p || 0) * 100)}%`; }
+  if (msg != null) {
+    const pct = Math.round((p || 0) * 100);
+    $("busyMsg").textContent = msg.replace(/\s*…?\s*\d+%$/, "");
+    $("busyPct").textContent = `${pct}%`;
+    $("busyBar").style.width = `${pct}%`;
+  }
 }
 
 // ---------- preview ----------
@@ -91,8 +96,9 @@ const preview = new Preview($("canvas"), video, {
   },
   onTime: (t) => updateScrub(t),
 });
-video.addEventListener("play", () => ($("playBtn").hidden = true));
-video.addEventListener("pause", () => ($("playBtn").hidden = !state.project));
+video.addEventListener("play", () => { $("playBtn").hidden = true; $("ppBtn").classList.add("playing"); });
+video.addEventListener("pause", () => { $("playBtn").hidden = !state.project; $("ppBtn").classList.remove("playing"); });
+$("ppBtn").addEventListener("click", () => { if (video.paused) preview.play(); else preview.pause(); });
 
 function updateScrub(t) {
   const p = state.project;

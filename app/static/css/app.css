@@ -249,3 +249,12 @@ textarea:focus, input:focus { outline: 2px solid rgba(227,32,42,.6); border-colo
 body.sheet-open .stage { width: calc((54svh - 118px) * 9 / 16); min-width: 0; }
 body.sheet-open .hint, body.sheet-open .broll, body.sheet-open .warnings { display: none; }
 .stage { transition: width .2s ease; }
+
+.busy-pct { font-size: 40px; font-weight: 800; letter-spacing: -1px; font-variant-numeric: tabular-nums; line-height: 1; }
+.pp-btn {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 0;
+  background: var(--red); color: #fff; display: grid; place-items: center; cursor: pointer;
+}
+.pp-btn svg { width: 18px; height: 18px; fill: #fff; stroke: none; }
+.pp-btn .i-pause, .pp-btn.playing .i-play { display: none; }
+.pp-btn.playing .i-pause { display: block; }

@@ -205,11 +205,13 @@ def auto_edit(pid: str, progress) -> dict:
     src = d / "source.mp4"
     warnings = []
 
-    progress(0.05, "Cleaning up your voice")
-    audio_mod.clean_voice(src, d / "voice_clean.wav")
+    dur = p["source"]["duration"]
+    progress(0.02, "Cleaning up your voice")
+    audio_mod.clean_voice(src, d / "voice_clean.wav", dur,
+                          lambda f: progress(0.02 + 0.16 * f, "Cleaning up your voice"))
     media.extract_wav(d / "voice_clean.wav", d / "voice16k.wav")
 
-    progress(0.2, "Transcribing captions")
+    progress(0.2, "Writing your captions (about 30 sec)")
     try:
         words = transcribe(d / "voice_clean.wav", d)
     except Exception as exc:
@@ -220,7 +222,8 @@ def auto_edit(pid: str, progress) -> dict:
     lines = build_caption_lines(words, int(style.get("maxWords", 3)))
 
     progress(0.45, "Finding your face")
-    track = face_track(src, p["source"]["width"], p["source"]["height"], p["source"]["duration"])
+    track = face_track(src, p["source"]["width"], p["source"]["height"], dur,
+                       on_progress=lambda f: progress(0.45 + 0.15 * f, "Finding your face"))
     if not track:
         warnings.append("Zoom: no face found, so zooms stay centered.")
 
