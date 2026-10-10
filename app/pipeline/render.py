@@ -182,6 +182,8 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
                     anim = int(since * FPS) if since < 0.15 and cap_style.get("animation", "pop") == "pop" else -1
                     key = (ln["id"], " ".join(w["w"] for w in ln["words"]), active, anim)
                     if key not in cap_cache:
+                        if len(cap_cache) > 12:  # only the current line is ever needed
+                            cap_cache.clear()
                         img, cx, cy = caption_image(cap_style, ln, active, since if anim >= 0 else 1.0)
                         cap_cache[key] = (*_rgba_to_np(img), cx, cy)
                     rgb, a, cx, cy = cap_cache[key]
