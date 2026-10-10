@@ -1,0 +1,20 @@
+# One-click deploy blueprint for Render.com (see SETUP.md, step 3).
+services:
+  - type: web
+    name: lollipop-social
+    runtime: docker
+    plan: standard          # 2 GB RAM / 1 CPU. "starter" is too small for video rendering.
+    healthCheckPath: /healthz
+    disk:
+      name: lollipop-data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: APP_PASSWORD
+        sync: false         # Render will ask you to type it
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: PEXELS_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

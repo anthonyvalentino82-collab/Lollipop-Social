@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1a0a0c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LolliPOP">
+  <title>LolliPOP Social</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
+  <link rel="icon" href="/static/brand/favicon.png">
+  <link rel="stylesheet" href="/static/css/app.css?v=1">
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <img class="top-icon" src="/static/brand/icon-192.png" alt="">
+      <div class="brand">
+        <div class="wordmark"><span class="lolli">Lolli</span><span class="pop">POP</span> <span class="social">Social</span></div>
+        <div class="tagline">A sweeter way to communicate</div>
+      </div>
+      <button class="icon-btn" id="btnNew" title="New video" hidden>
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </header>
+
+    <!-- Preview -->
+    <section class="stage-wrap">
+      <div class="stage" id="stage">
+        <canvas id="canvas" width="720" height="1280"></canvas>
+
+        <div class="empty" id="empty">
+          <div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></div>
+          <h2>Record or upload</h2>
+          <p>Film yourself talking, then let Auto Edit add captions, zooms, B-roll and clean audio.</p>
+          <label class="btn btn-primary">
+            <input type="file" accept="video/*" capture="user" id="inRecord" hidden>
+            Record video
+          </label>
+          <label class="btn btn-ghost">
+            <input type="file" accept="video/*" id="inUpload" hidden>
+            Choose from library
+          </label>
+        </div>
+
+        <button class="play-btn" id="playBtn" hidden aria-label="Play">
+          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+
+        <div class="busy" id="busy" hidden>
+          <div class="spinner"></div>
+          <div class="busy-msg" id="busyMsg">Working…</div>
+          <div class="bar"><div class="bar-fill" id="busyBar"></div></div>
+        </div>
+      </div>
+
+      <div class="scrub" id="scrub" hidden>
+        <span id="tCur">0:00</span>
+        <input type="range" id="seek" min="0" max="1000" value="0">
+        <span id="tDur">0:00</span>
+      </div>
+      <div class="hint" id="hint" hidden>Drag the headline, captions or logo to move them. Pinch to resize.</div>
+    </section>
+
+    <!-- Auto B-roll strip -->
+    <section class="broll" id="brollStrip" hidden>
+      <div class="broll-head">
+        <span>Auto B-roll</span>
+        <button class="link" id="btnClips">My clips</button>
+      </div>
+      <div class="broll-list" id="brollList"></div>
+    </section>
+
+    <div class="warnings" id="warnings" hidden></div>
+
+    <!-- The six controls -->
+    <nav class="tools" id="tools">
+      <button data-tool="trim"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/></svg>Trim</button>
+      <button data-tool="captions"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M7 15h4M13 15h4M7 11h10"/></svg>Captions</button>
+      <button data-tool="headline"><svg viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>Headline</button>
+      <button data-tool="logo"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>Logo</button>
+      <button data-tool="music"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>Music</button>
+      <button data-tool="zoom"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/></svg>Zoom</button>
+    </nav>
+
+    <button class="btn btn-auto" id="btnAuto" disabled>
+      <svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+      <span id="btnAutoLabel">Auto Edit</span>
+    </button>
+    <button class="btn btn-save" id="btnSave" disabled>
+      <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+      Save Video
+    </button>
+  </div>
+
+  <!-- Bottom sheet (content filled per tool) -->
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-grab"></div>
+    <div class="sheet-head">
+      <h3 id="sheetTitle"></h3>
+      <button class="link" id="sheetDone">Done</button>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+
+  <!-- Login -->
+  <div class="login" id="login" hidden>
+    <img src="/static/brand/lollipop-logo.png" alt="LolliPOP">
+    <p>Enter your password</p>
+    <form id="loginForm">
+      <input type="password" id="loginPw" autocomplete="current-password" placeholder="Password">
+      <button class="btn btn-primary" type="submit">Unlock</button>
+    </form>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script type="module" src="/static/js/app.js?v=1"></script>
+</body>
+</html>
