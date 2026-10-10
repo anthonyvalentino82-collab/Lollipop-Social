@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
   <link rel="icon" href="/static/brand/favicon.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=25">
+  <link rel="stylesheet" href="/static/css/app.css?v=26">
 </head>
 <body>
   <div class="app">
@@ -29,21 +29,24 @@
     <!-- Landing page -->
     <section class="hero" id="hero">
       <div class="hero-glow" aria-hidden="true"><span></span><span></span><span></span></div>
-      <div class="hero-badge">✨ Your AI video studio</div>
-      <h1 class="hero-title">Welcome to<br><span class="hero-emoji">🍭</span><span class="hero-brand"><i>Lolli</i>POP</span> Social</h1>
-      <p class="hero-sub">Send out social videos in <b>less than 60&nbsp;seconds</b>.</p>
+      <div class="hero-badge">Welcome to <span class="hb-emoji">🍭</span> <b><i>Lolli</i>POP</b> Social</div>
+      <h1 class="hero-title">You be the <span class="hero-star">star.</span><span class="star-emoji">⭐</span><br><span class="hero-title-2">We do the heavy lifting.</span></h1>
 
-      <div class="demo-phone" aria-hidden="true">
-        <div class="demo-head">YOUR<br><em>NEXT</em><br>POST</div>
-        <svg class="demo-person" viewBox="0 0 100 100" preserveAspectRatio="none"><ellipse cx="50" cy="27" rx="21" ry="22"/><rect x="42" y="44" width="16" height="12" rx="4"/><path d="M0 100c2-30 20-46 50-46s48 16 50 46z"/></svg>
-        <div class="demo-cap"><span>READY</span> <span>IN</span> <span>60</span> <span>SEC</span></div>
-        <div class="demo-logo"><i>Lolli</i>POP</div>
+      <div class="demo-stage" aria-hidden="true">
+        <div class="spotlight"></div>
+        <div class="sparkles"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="demo-phone">
+          <div class="demo-head">BE<br>THE<br><em>STAR</em></div>
+          <svg class="demo-person" viewBox="0 0 100 100" preserveAspectRatio="none"><ellipse cx="50" cy="27" rx="21" ry="22"/><rect x="42" y="44" width="16" height="12" rx="4"/><path d="M0 100c2-30 20-46 50-46s48 16 50 46z"/></svg>
+          <div class="demo-cap"><span>READY</span> <span>IN</span> <span>60</span> <span>SEC</span></div>
+          <div class="demo-logo"><i>Lolli</i>POP</div>
+        </div>
       </div>
 
-      <div class="hero-steps">
-        <div><span>🎥</span>Record</div><i>›</i>
-        <div><span>✨</span>AI Edit</div><i>›</i>
-        <div><span>📲</span>Post</div>
+      <p class="hero-sub">AI adds captions, headlines, zooms, B&#8209;roll &amp;&nbsp;music.<br><b>Text it or post it in under 60&nbsp;seconds.</b></p>
+
+      <div class="share-row" aria-label="Send it anywhere">
+        <span>💬 Text</span><span>Instagram</span><span>TikTok</span><span>Facebook</span><span>LinkedIn</span><span>YouTube</span>
       </div>
 
       <label class="btn btn-cta">
@@ -56,11 +59,6 @@
         Choose from library
       </label>
       <button class="link" id="btnContinue" hidden>Continue my last video ›</button>
-
-      <div class="marquee" aria-hidden="true"><div>
-        <span>Animated captions</span><span>Headline behind you</span><span>Auto zoom</span><span>B-roll</span><span>Clean audio</span><span>Remove pauses</span><span>Music</span><span>Your logo</span>
-        <span>Animated captions</span><span>Headline behind you</span><span>Auto zoom</span><span>B-roll</span><span>Clean audio</span><span>Remove pauses</span><span>Music</span><span>Your logo</span>
-      </div></div>
     </section>
 
     <!-- Preview -->
