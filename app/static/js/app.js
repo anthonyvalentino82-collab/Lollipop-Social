@@ -191,6 +191,23 @@ $("seek").addEventListener("input", () => {
 });
 $("seek").addEventListener("change", () => (seekDragging = false));
 
+// ---------- video size (pulsing chevron on the video) ----------
+const SIZES = ["s", "m", "l", "full"];
+const SIZE_NAMES = { s: "Small", m: "Medium", l: "Large", full: "Full screen" };
+function setSize(sz) {
+  state.size = sz;
+  document.body.dataset.size = sz;
+  $("sizeLabel").textContent = SIZE_NAMES[sz];
+  if (sz === "full") window.scrollTo({ top: 0 });
+  preview.draw();
+}
+$("sizeBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  setSize(SIZES[(SIZES.indexOf(state.size || "m") + 1) % SIZES.length]);
+  $("sizeBtn").classList.add("used");
+});
+setSize("m");
+
 // ---------- saving ----------
 const pending = new Set();
 let saveTimer = null;
@@ -276,8 +293,10 @@ async function openProject(p) {
   preview.setMusic(p.music?.file ? `${base}/${p.music.file}?v=${encodeURIComponent(p.music.name || "")}` : null);
   if (preview.needsMask()) preview.ensureMasker();
   $("playBtn").hidden = false;
+  $("sizeBtn").hidden = false;
   document.querySelectorAll(".tools button").forEach((b) => (b.disabled = false));
   $("btnAuto").disabled = false;
+  $("btnAuto").hidden = false;
   $("btnAuto").classList.toggle("done", !!p.autoEdited);
   $("btnAutoLabel").textContent = p.autoEdited ? "AI Edit" : "START HERE";
   $("btnAutoSub").textContent = p.autoEdited ? "Walk through your edits again" : "Tap for ✨ AI Edit";
@@ -315,9 +334,11 @@ function resetToEmpty() {
   state.project = null;
   store("lp_project", null);
   $("empty").hidden = false;
-  ["scrub", "hint", "brollStrip", "warnings", "playBtn", "btnNew", "btnSave", "btnFine", "fineTune"].forEach((id) => ($(id).hidden = true));
+  ["scrub", "hint", "brollStrip", "warnings", "playBtn", "btnNew", "btnSave", "btnFine", "fineTune", "sizeBtn"].forEach((id) => ($(id).hidden = true));
+  setSize("m");
   document.querySelectorAll(".tools button").forEach((b) => (b.disabled = true));
   $("btnAuto").disabled = true;
+  $("btnAuto").hidden = true;
   $("btnAuto").classList.remove("done");
   $("btnSave").classList.remove("ready");
   $("btnAutoLabel").textContent = "START HERE";
@@ -500,6 +521,7 @@ $("btnClips").addEventListener("click", () => openSheet("clips"));
 function closeSheet() {
   $("sheet").hidden = true;
   document.body.classList.remove("sheet-open");
+  if (state.size === "s") setSize("m");
   state.sheet = null;
   state.wizard = null;
   preview.ghostCaptions = false;
@@ -529,6 +551,7 @@ function renderSheet({ key, title, step, content, footer }) {
   if (footer) foot.append(...footer.filter(Boolean));
   preview.ghostCaptions = key === "captions";
   window.scrollTo({ top: 0, behavior: "smooth" });
+  if (!document.body.classList.contains("sheet-open") || state.size === "full") setSize("s");
   document.body.classList.add("sheet-open");
   $("sheet").hidden = false; // no backdrop: the preview stays draggable while a panel is open
   preview.draw();
@@ -1157,13 +1180,20 @@ async function boot() {
     state.settings = await api("/api/settings");
     loadBrandFonts();
     await Promise.all(["Anton", "Bebas Neue", "Oswald", "Montserrat", "Poppins", "Playfair"].map((f) => document.fonts.load(`40px "${f}"`)));
+    // Always open on the start page; the last video is one tap away.
     const last = recall("lp_project");
     if (last) {
-      try {
-        const p = await api(`/api/projects/${last}`);
-        if (p.status === "ready") await openProject(p); else store("lp_project", null);
-      }
-      catch (e) { if (e instanceof AuthError) return; store("lp_project", null); }
+      $("btnContinue").hidden = false;
+      $("btnContinue").onclick = async () => {
+        try {
+          const p = await api(`/api/projects/${last}`);
+          if (p.status === "ready") await openProject(p);
+          else { store("lp_project", null); $("btnContinue").hidden = true; toast("That video isn't available any more."); }
+        } catch (e) {
+          if (e instanceof AuthError) return;
+          store("lp_project", null); $("btnContinue").hidden = true; toast("That video isn't available any more.");
+        }
+      };
     }
   } catch (e) {
     if (!(e instanceof AuthError)) toast(e.message, 5000);

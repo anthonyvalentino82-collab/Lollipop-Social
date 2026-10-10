@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
   <link rel="icon" href="/static/brand/favicon.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=12">
+  <link rel="stylesheet" href="/static/css/app.css?v=13">
 </head>
 <body>
   <div class="app">
@@ -43,7 +43,13 @@
             <input type="file" accept="video/*" id="inUpload" hidden>
             Choose from library
           </label>
+          <button class="link" id="btnContinue" hidden>Continue my last video ›</button>
         </div>
+
+        <button class="size-btn" id="sizeBtn" hidden aria-label="Change video size">
+          <svg viewBox="0 0 24 24"><path d="M7 10l5-5 5 5M7 14l5 5 5-5"/></svg>
+          <span id="sizeLabel">Small</span>
+        </button>
 
         <button class="play-btn" id="playBtn" hidden aria-label="Play">
           <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -72,7 +78,7 @@
 
     <div class="warnings" id="warnings" hidden></div>
 
-    <button class="btn btn-auto" id="btnAuto" disabled>
+    <button class="btn btn-auto" id="btnAuto" disabled hidden>
       <svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
       <span class="auto-text"><span class="auto-big" id="btnAutoLabel">START HERE</span><span class="auto-small" id="btnAutoSub">Tap for ✨ AI Edit</span></span>
     </button>
@@ -147,6 +153,6 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=12"></script>
+  <script type="module" src="/static/js/app.js?v=13"></script>
 </body>
 </html>
