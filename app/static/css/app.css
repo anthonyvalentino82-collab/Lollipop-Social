@@ -623,3 +623,4 @@ body.sheet-open #sizeBtnMain { display: none; }
 .cam-flip { justify-self: end; width: 48px; height: 48px; border-radius: 50%; border: 0; background: rgba(0,0,0,.45); color: #fff; display: grid; place-items: center; }
 body.cam-open { overflow: hidden; }
 .hero-title { font-size: clamp(28px, 8.4vw, 42px); }
+.cam video.fit { object-fit: contain; }

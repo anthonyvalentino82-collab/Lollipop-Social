@@ -414,18 +414,47 @@ function camMime() {
 async function camStart() {
   camStop();
   const portrait = window.innerHeight >= window.innerWidth;
-  cam.stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: cam.facing, frameRate: { ideal: 30 },
-             width: { ideal: portrait ? 1080 : 1920 }, height: { ideal: portrait ? 1920 : 1080 } },
-    // Raw microphone: our own audio cleanup does a better job than the phone-call filters.
-    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-  });
+  // Raw microphone: our own audio cleanup does a better job than the phone-call filters.
+  const audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+  // iPhone Safari interprets width/height in the camera sensor's (landscape) orientation in
+  // some versions and in the screen's orientation in others. Asking the wrong way round
+  // returns a cropped, zoomed-in feed, so try both and keep the one that matches the phone.
+  const attempts = [
+    { width: { ideal: 1920 }, height: { ideal: 1080 } },
+    { width: { ideal: 1080 }, height: { ideal: 1920 } },
+    { width: { ideal: 1280 }, height: { ideal: 720 } },
+  ];
+  let best = null, bestScore = -1;
+  for (const size of attempts) {
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cam.facing, frameRate: { ideal: 30 }, ...size }, audio });
+    } catch (e) { continue; }
+    const st = stream.getVideoTracks()[0].getSettings();
+    const w = st.width || 0, h = st.height || 0;
+    const matches = portrait ? h >= w : w >= h;
+    const score = (matches ? 1e7 : 0) + Math.min(w, h) * Math.max(w, h) / 1000;
+    if (score > bestScore) { best?.getTracks().forEach((t) => t.stop()); best = stream; bestScore = score; }
+    else stream.getTracks().forEach((t) => t.stop());
+    if (matches && Math.min(w, h) >= 1080) break; // good enough — stop asking
+  }
+  if (!best) throw new Error("camera unavailable");
+  cam.stream = best;
+  const track = best.getVideoTracks()[0];
+  // Widest view the camera offers (like the iPhone Camera app's default).
+  try {
+    const caps = track.getCapabilities?.() || {};
+    if (caps.zoom) await track.applyConstraints({ advanced: [{ zoom: caps.zoom.min }] });
+  } catch (e) { /* zoom control not supported */ }
   const v = $("camView");
-  v.srcObject = cam.stream;
+  v.srcObject = best;
   v.classList.toggle("mirror", cam.facing === "user");
   await v.play().catch(() => {});
-  const st = cam.stream.getVideoTracks()[0].getSettings();
-  const short = Math.min(st.width || 0, st.height || 0);
+  const st = track.getSettings();
+  const w = st.width || v.videoWidth, h = st.height || v.videoHeight;
+  // If the feed isn't shaped like the screen, show all of it instead of cropping in.
+  v.classList.toggle("fit", portrait ? w > h : h > w);
+  const short = Math.min(w || 0, h || 0);
   $("camQuality").textContent = short ? `${short >= 1080 ? "HD 1080p" : short + "p"} · ${Math.round(st.frameRate || 30)} fps` : "";
 }
 function camStop() {
