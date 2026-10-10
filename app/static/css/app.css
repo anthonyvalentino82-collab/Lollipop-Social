@@ -551,3 +551,49 @@ body.sheet-open #sizeBtnMain { display: none; }
 .share-row span { font-size: 11.5px; padding: 4px 9px; }
 .demo-stage .demo-person { height: 60% !important; }
 .demo-stage .demo-cap { font-size: 7.6px; bottom: 17%; }
+
+/* ===== landing v3: your logo with the app's powers orbiting it ===== */
+.orbit { position: relative; width: min(250px, 31svh); aspect-ratio: 1; margin: 2px 0; }
+.orbit-glow { position: absolute; inset: 22%; border-radius: 50%; background: radial-gradient(circle, rgba(255,90,60,.75), rgba(242,194,48,.25) 55%, transparent 72%);
+  filter: blur(14px); animation: corePulse 2.6s ease-in-out infinite; }
+@keyframes corePulse { 50% { transform: scale(1.18); opacity: .8; } }
+.orbit-core { position: absolute; left: 50%; top: 50%; width: 34%; transform: translate(-50%, -50%); border-radius: 26%;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.15), 0 10px 30px rgba(0,0,0,.6), 0 0 40px rgba(255,90,60,.6); animation: coreBob 4s ease-in-out infinite; }
+@keyframes coreBob { 50% { transform: translate(-50%, -54%) rotate(-4deg); } }
+.orbit-line { position: absolute; border-radius: 50%; border: 1px dashed rgba(255,255,255,.16); }
+.orbit-line.l1 { inset: 3%; } .orbit-line.l2 { inset: 22%; border-color: rgba(242,194,48,.22); }
+.ring { position: absolute; inset: 0; animation: orbitSpin 22s linear infinite; }
+.ring.r2 { animation-duration: 15s; animation-direction: reverse; }
+.ring span { position: absolute; left: 50%; top: 50%; width: 0; height: 0;
+  transform: rotate(var(--a)) translateX(var(--rad)) rotate(calc(-1 * var(--a))); }
+.ring.r1 span { --rad: min(118px, 14.6svh); }
+.ring.r2 span { --rad: min(70px, 8.8svh); }
+.ring span b { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font-size: 11px; font-weight: 800;
+  padding: 5px 9px; border-radius: 999px; color: #fff; background: rgba(30, 12, 14, .82); border: 1px solid rgba(255,255,255,.18);
+  box-shadow: 0 4px 14px rgba(0,0,0,.45), 0 0 12px rgba(255,90,60,.25); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  animation: orbitSpin 22s linear infinite reverse; }   /* counter-spin keeps the labels upright */
+.ring.r2 span b { animation-duration: 15s; animation-direction: normal; font-size: 10px; background: rgba(60, 20, 18, .85); border-color: rgba(242,194,48,.35); }
+@keyframes orbitSpin { to { rotate: 360deg; } }
+
+/* "AI adds captions / headlines / zooms / B-roll / music" — the last word keeps changing */
+.rotator { display: inline-block; height: 1.3em; overflow: hidden; vertical-align: bottom; }
+.rotator > span { display: flex; flex-direction: column; animation: rotWords 10s cubic-bezier(.7,0,.3,1) infinite; }
+.rotator b { height: 1.3em; line-height: 1.3em; color: #ffcf5a; font-weight: 800; }
+@keyframes rotWords {
+  0%, 16% { transform: translateY(0); } 20%, 36% { transform: translateY(-1.3em); } 40%, 56% { transform: translateY(-2.6em); }
+  60%, 76% { transform: translateY(-3.9em); } 80%, 96% { transform: translateY(-5.2em); } 100% { transform: translateY(-6.5em); }
+}
+.hero-sub { font-size: 16px; }
+.hero-sub strong { color: #fff; font-weight: 800; }
+
+/* landing v3 fixes: one ring, labels never behind the logo */
+.orbit { width: min(220px, 27svh); margin: 18px 0 20px; }
+.orbit-line.l1 { inset: 0; } .orbit-line.l2 { inset: 24%; }
+.ring.r1 { animation-duration: 36s; z-index: 2; }
+.ring.r1 span { --rad: min(110px, 13.5svh); }
+.ring.r1 span b { animation-duration: 36s; }
+.orbit-core { z-index: 1; width: 36%; }
+.rotator { text-align: left; }
+.rotator b { display: block; }
+/* keep each label centred on its point while it counter-spins (rotate about its own centre) */
+.ring span b { transform: none; translate: -50% -50%; }
