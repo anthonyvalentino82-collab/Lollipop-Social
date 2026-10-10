@@ -1,5 +1,5 @@
 import { Preview } from "./preview.js";
-import { buildCaptionLines, retimeLine } from "./timeline.js";
+import { buildCaptionLines, effectiveCuts, keptDuration, keptSegments, outToSrc, retimeLine, srcToOut } from "./timeline.js";
 
 const $ = (id) => document.getElementById(id);
 const video = document.createElement("video");
@@ -10,6 +10,43 @@ video.preload = "auto";
 const state = { project: null, settings: null, status: null, sheet: null, wizard: null, exportUrl: null };
 const FONTS_CAPTION = ["Montserrat", "Anton", "Bebas Neue", "Poppins", "Oswald", "Playfair"];
 const FONTS_HEADLINE = ["Anton", "Bebas Neue", "Oswald", "Montserrat", "Playfair"];
+const brandFonts = () => (state.settings?.fonts || []).map((f) => f.name);
+
+// Make uploaded brand fonts available to the preview canvas.
+async function loadBrandFonts() {
+  for (const f of state.settings?.fonts || []) {
+    if ([...document.fonts].some((ff) => ff.family === f.name || ff.family === `"${f.name}"`)) continue;
+    try {
+      const face = new FontFace(f.name, `url(/files/fonts/${f.file})`);
+      await face.load();
+      document.fonts.add(face);
+    } catch (e) { console.warn("font failed", f.name, e); }
+  }
+  preview.draw();
+}
+
+// Font chips (built-in + your brand fonts) with "+ Add my font".
+function fontPicker(label, builtins, current, onpick) {
+  const inp = el("input", { type: "file", accept: ".ttf,.otf,font/ttf,font/otf", hidden: true });
+  inp.addEventListener("change", async () => {
+    const f = inp.files[0];
+    if (!f) return;
+    const name = prompt("Name this font (e.g. Horizon Brand)", f.name.replace(/\.[^.]+$/, "")) || "";
+    try {
+      busy("Uploading font…", 0);
+      state.settings = await upload("/api/fonts", { file: f, name }, (x) => busy("Uploading font…", x));
+      busy(null);
+      await loadBrandFonts();
+      const added = state.settings.fonts[state.settings.fonts.length - 1];
+      onpick(added.name);
+      refreshSheet();
+      toast(`Font “${added.name}” added`);
+    } catch (e) { busy(null); toast(e.message, 4000); }
+  });
+  const field = chips(label, [...builtins, ...brandFonts()].map((f) => [f, f, `font-family:"${f}"`]), current, onpick);
+  field.querySelector(".chips").append(el("label", { class: "chip add-font" }, inp, "+ Add my font"));
+  return field;
+}
 const TEXT_COLORS = ["#FFFFFF", "#E9E1D3", "#F2C230", "#E3202A", "#111111", "#C4C4C4"];
 const ACCENT_COLORS = ["#F2C230", "#E3202A", "#D7262E", "#FFFFFF", "#33C3F0", "#7CFC8A"];
 const INTENSITY = { subtle: 1.08, medium: 1.15, strong: 1.25 };
@@ -127,20 +164,26 @@ $("ppBtn").addEventListener("click", () => { if (video.paused) preview.play(); e
 function updateScrub(t) {
   const p = state.project;
   if (!p) return;
-  const d = p.trim.end - p.trim.start;
-  $("tCur").textContent = fmt(t - p.trim.start);
+  const segs = keptSegments(p.trim, effectiveCuts(p));
+  const d = keptDuration(segs);
+  const o = srcToOut(segs, t);
+  $("tCur").textContent = fmt(o);
   $("tDur").textContent = fmt(d);
-  const v = Math.round(((t - p.trim.start) / Math.max(0.01, d)) * 1000);
+  const v = Math.round((o / Math.max(0.01, d)) * 1000);
   if (!seekDragging) { $("seek").value = v; }
   $("seek").style.setProperty("--p", `${v / 10}%`);
   highlightCaptionRow(t);
-  if (state.sheet === "trim" && trimUI) trimUI.head.style.left = `${(t / trimUI.dur) * 100}%`;
+  if (state.sheet === "trim" && trimUI) {
+    trimUI.head.style.left = `${(t / trimUI.dur) * 100}%`;
+    if (pendingCut != null) trimUI.paint();
+  }
 }
 let seekDragging = false;
 $("seek").addEventListener("input", () => {
   seekDragging = true;
   const p = state.project;
-  video.currentTime = p.trim.start + ($("seek").value / 1000) * (p.trim.end - p.trim.start);
+  const segs = keptSegments(p.trim, effectiveCuts(p));
+  video.currentTime = outToSrc(segs, ($("seek").value / 1000) * keptDuration(segs));
 });
 $("seek").addEventListener("change", () => (seekDragging = false));
 
@@ -498,7 +541,7 @@ function refreshSheet() {
 
 // The guided AI Edit: one simple choice per screen, then watch and save.
 const STEPS = [
-  { key: "trim", title: "Trim the start & end", build: () => trimSheet() },
+  { key: "trim", title: "Trim, cut & remove pauses", build: () => trimSheet() },
   { key: "captions", title: "Pick a caption style", build: () => captionsStep() },
   { key: "headline", title: "Add a headline", build: () => headlineStep() },
   { key: "logo", title: "Your logo", build: () => logoSheet() },
@@ -576,6 +619,7 @@ function swatches(label, colors, current, onpick) {
 
 // ----- TRIM (filmstrip with draggable handles) -----
 let trimUI = null;
+let pendingCut = null; // start time of a cut being marked
 const fmtT = (s) => { s = Math.max(0, s || 0); return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`; };
 function trimSheet() {
   const p = state.project, dur = p.source.duration;
@@ -585,7 +629,8 @@ function trimSheet() {
   const box = el("div", { class: "trim-box" });
   const hL = el("div", { class: "handle l" }, el("span")), hR = el("div", { class: "handle r" }, el("span"));
   const head = el("div", { class: "playhead" });
-  const wrap = el("div", { class: "strip-wrap" }, strip, shadeL, shadeR, box, hL, hR, head);
+  const cutLayer = el("div", { class: "cut-layer" });
+  const wrap = el("div", { class: "strip-wrap" }, strip, cutLayer, shadeL, shadeR, box, hL, hR, head);
   const lblStart = el("span"), lblLen = el("span", { class: "len" }), lblEnd = el("span");
   const labels = el("div", { class: "strip-labels" }, lblStart, lblLen, lblEnd);
 
@@ -599,7 +644,13 @@ function trimSheet() {
     hR.style.left = pct(end);
     lblStart.textContent = `Start ${fmtT(start)}`;
     lblEnd.textContent = `End ${fmtT(end)}`;
-    lblLen.textContent = `${fmtT(end - start)} long`;
+    lblLen.textContent = `${fmtT(keptDuration(keptSegments(p.trim, effectiveCuts(p))))} final`;
+    // Red = sections you cut; striped = pauses AI removes.
+    cutLayer.innerHTML = "";
+    const mark = (c, cls) => cutLayer.append(el("div", { class: `cutmark ${cls}`, style: `left:${pct(c.start)};width:${((c.end - c.start) / dur) * 100}%` }));
+    if (p.removePauses !== false) (p.pauseCuts || []).forEach((c) => mark(c, "auto"));
+    (p.cuts || []).forEach((c) => mark(c, "manual"));
+    if (pendingCut != null) mark({ start: Math.min(pendingCut, video.currentTime), end: Math.max(pendingCut, video.currentTime) }, "pending");
   };
   const timeAt = (e) => {
     const r = wrap.getBoundingClientRect();
@@ -642,7 +693,7 @@ function trimSheet() {
     wrap.addEventListener("pointermove", seek);
     wrap.addEventListener("pointerup", up);
   });
-  trimUI = { head, dur };
+  trimUI = { head, dur, paint };
   paint();
   const nudge = (which, d) => () => {
     if (which === "l") p.trim.start = +Math.min(Math.max(0, p.trim.start + d), p.trim.end - MIN).toFixed(2);
@@ -666,7 +717,45 @@ function trimSheet() {
       el("button", { class: "small-btn", onclick: () => { p.trim.start = +Math.min(video.currentTime, p.trim.end - MIN).toFixed(2); paint(); save(["trim"]); } }, "Start at playhead"),
       el("button", { class: "small-btn", onclick: () => { p.trim.end = +Math.max(video.currentTime, p.trim.start + MIN).toFixed(2); paint(); save(["trim"]); } }, "End at playhead")),
     el("button", { class: "small-btn wide", onclick: () => { p.trim = { start: 0, end: dur }; save(["trim"]); refreshSheet(); } }, "Reset trim"),
+    ...cutControls(paint),
   ];
+}
+
+// Cut sections out of the middle (stumbles, retakes) + automatic pause removal.
+function cutControls(paint) {
+  const p = state.project;
+  p.cuts = p.cuts || [];
+  const pauses = p.pauseCuts || [];
+  const saved = pauses.reduce((n, c) => n + (c.end - c.start), 0);
+  const out = [el("div", { class: "section-title" }, "✂ Cut out the middle")];
+  if (pendingCut == null) {
+    out.push(
+      el("p", { class: "note" }, "Move the white line to where the mistake starts, tap “Start cut”, move to where it ends, then tap “End cut”."),
+      el("button", { class: "small-btn wide cut-btn", onclick: () => { preview.pause(); pendingCut = +video.currentTime.toFixed(2); refreshSheet(); } }, "✂ Start cut here"));
+  } else {
+    out.push(
+      el("p", { class: "note warn" }, `Cut starts at ${fmtT(pendingCut)}. Now move the white line to where it should end.`),
+      el("div", { class: "grid2" },
+        el("button", { class: "small-btn", onclick: () => { pendingCut = null; refreshSheet(); } }, "Cancel"),
+        el("button", { class: "small-btn cut-btn", onclick: () => {
+          const a = Math.min(pendingCut, video.currentTime), b = Math.max(pendingCut, video.currentTime);
+          pendingCut = null;
+          if (b - a < 0.1) { toast("Move the white line first, so there's something to cut."); refreshSheet(); return; }
+          p.cuts.push({ start: +a.toFixed(2), end: +b.toFixed(2) });
+          save(["cuts"]); refreshSheet(); toast(`Cut ${(b - a).toFixed(1)}s`);
+        } }, "✂ End cut here")));
+  }
+  p.cuts.forEach((c, i) => out.push(el("div", { class: "row cut-row" },
+    el("span", {}, `✂ ${fmtT(c.start)} → ${fmtT(c.end)}  (${(c.end - c.start).toFixed(1)}s)`),
+    el("button", { class: "link", onclick: () => { p.cuts.splice(i, 1); save(["cuts"]); refreshSheet(); } }, "Undo"))));
+  out.push(
+    el("div", { class: "section-title" }, "⏸ Remove pauses"),
+    toggle(pauses.length ? `Remove ${pauses.length} pause${pauses.length === 1 ? "" : "s"} automatically (saves ${saved.toFixed(1)}s)` : "Remove pauses automatically",
+      p.removePauses !== false, (v) => { p.removePauses = v; save(["removePauses"]); paint && paint(); }),
+    el("p", { class: "note" }, pauses.length
+      ? "AI cuts the dead air between your sentences, like Captions AI. Striped areas on the strip are the pauses it removes."
+      : "AI Edit finds the pauses between your sentences; none long enough were found."));
+  return out;
 }
 
 // ----- CAPTIONS -----
@@ -688,10 +777,11 @@ function captionsSheet() {
   out.push(
     el("p", { class: "note" }, "Drag the captions on the preview to move them. Pinch to resize."),
     chips("Position", [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]], null, (v) => { s.y = { top: 0.2, middle: 0.5, bottom: 0.72 }[v]; s.x = 0.5; changed(); }),
-    chips("Font", FONTS_CAPTION.map((f) => [f, f, `font-family:"${f}"`]), s.font, (v) => { s.font = v; changed(); }),
+    fontPicker("Font", FONTS_CAPTION, s.font, (v) => { s.font = v; changed(); }),
     slider("Size", { min: 32, max: 140, value: s.size || 66, oninput: (v) => { s.size = v; changed(); } }),
     swatches("Text color", TEXT_COLORS, s.color, (v) => { s.color = v; changed(); }),
-    swatches("Spoken-word highlight", ACCENT_COLORS, s.highlight, (v) => { s.highlight = v; changed(); }),
+    chips("Spoken-word highlight", [["color", "Colored word"], ["box", "Box behind word"]], s.highlightStyle || "color", (v) => { s.highlightStyle = v; changed(); }),
+    swatches("Highlight color", ACCENT_COLORS, s.highlight, (v) => { s.highlight = v; changed(); }),
     chips("Words at a time", [1, 2, 3, 4].map((n) => [n, String(n)]), s.maxWords || 3, (n) => {
       s.maxWords = n;
       const words = (c.lines || []).flatMap((l) => l.words);
@@ -720,7 +810,7 @@ function headlineSheet() {
       el("p", { class: "note" }, "This stays on screen the whole video. Put *stars* around words to color them. Press return for a new line.")),
     toggle("Place behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); }),
     el("p", { class: "note" }, "Drag the headline on the preview to move it. Pinch to resize."),
-    chips("Font", FONTS_HEADLINE.map((f) => [f, f, `font-family:"${f}"`]), h.font, (v) => { h.font = v; changed(); }),
+    fontPicker("Font", FONTS_HEADLINE, h.font, (v) => { h.font = v; changed(); }),
     slider("Size", { min: 50, max: 320, value: h.size || 150, oninput: (v) => { h.size = v; changed(); } }),
     swatches("Main color", TEXT_COLORS, h.color, (v) => { h.color = v; changed(); }),
     swatches("*Starred* word color", ACCENT_COLORS, h.accent, (v) => { h.accent = v; changed(); }),
@@ -825,11 +915,14 @@ function zoomSheet() {
 
 // ----- guided-step builders -----
 const CAPTION_PRESETS = [
-  { name: "Bold Pop", style: { font: "Montserrat", color: "#FFFFFF", highlight: "#F2C230", stroke: 7, uppercase: true, animation: "pop", size: 66 } },
-  { name: "LolliPOP Red", style: { font: "Anton", color: "#FFFFFF", highlight: "#E3202A", stroke: 7, uppercase: true, animation: "pop", size: 78 } },
-  { name: "News", style: { font: "Oswald", color: "#FFFFFF", highlight: "#E3202A", stroke: 6, uppercase: true, animation: "pop", size: 72 } },
-  { name: "Clean", style: { font: "Poppins", color: "#FFFFFF", highlight: "#FFFFFF", stroke: 5, uppercase: false, animation: "none", size: 58 } },
-  { name: "Elegant", style: { font: "Playfair", color: "#F4EFE9", highlight: "#F2C230", stroke: 6, uppercase: false, animation: "pop", size: 70 } },
+  { name: "Red Box", style: { font: "Montserrat", color: "#FFFFFF", highlight: "#E3202A", highlightStyle: "box", boxText: "#FFFFFF", stroke: 7, uppercase: true, animation: "pop", size: 64 } },
+  { name: "Gold Box", style: { font: "Montserrat", color: "#FFFFFF", highlight: "#F2C230", highlightStyle: "box", boxText: "#111111", stroke: 7, uppercase: true, animation: "pop", size: 64 } },
+  { name: "Bold Pop", style: { font: "Montserrat", color: "#FFFFFF", highlight: "#F2C230", highlightStyle: "color", stroke: 7, uppercase: true, animation: "pop", size: 66 } },
+  { name: "LolliPOP Red", style: { font: "Anton", color: "#FFFFFF", highlight: "#E3202A", highlightStyle: "color", stroke: 7, uppercase: true, animation: "pop", size: 78 } },
+  { name: "News", style: { font: "Oswald", color: "#FFFFFF", highlight: "#E3202A", highlightStyle: "color", stroke: 6, uppercase: true, animation: "pop", size: 72 } },
+  { name: "Clean", style: { font: "Poppins", color: "#FFFFFF", highlight: "#FFFFFF", highlightStyle: "color", stroke: 5, uppercase: false, animation: "none", size: 58 } },
+  { name: "Elegant", style: { font: "Playfair", color: "#F4EFE9", highlight: "#F2C230", highlightStyle: "color", stroke: 6, uppercase: false, animation: "pop", size: 70 } },
+  { name: "Bebas Gold", style: { font: "Bebas Neue", color: "#FFFFFF", highlight: "#F2C230", highlightStyle: "color", stroke: 6, uppercase: true, animation: "pop", size: 84 } },
 ];
 const HEADLINE_PRESETS = [
   { name: "Cinematic", font: "Anton", color: "#E9E1D3", accent: "#D7262E" },
@@ -838,23 +931,25 @@ const HEADLINE_PRESETS = [
   { name: "Modern", font: "Montserrat", color: "#FFFFFF", accent: "#E3202A" },
 ];
 
-function presetCard({ label, sample, font, color, accent, upper, on, onpick }) {
+function presetCard({ label, sample, font, color, accent, upper, on, onpick, box = false, boxText = "#FFFFFF" }) {
   const words = sample.split(" ");
   const txt = (w) => (upper ? w.toUpperCase() : w);
+  const accentStyle = box ? `background:${accent};color:${boxText};border-radius:5px;padding:0 3px;text-shadow:none` : `color:${accent}`;
   return el("button", { class: `preset${on ? " on" : ""}`, onclick: onpick },
     el("div", { class: "preset-sample", style: `font-family:"${font}";color:${color}` },
-      ...words.map((w, i) => el("span", { style: i === 1 ? `color:${accent}` : "" }, txt(w) + " "))),
+      ...words.map((w, i) => el("span", { style: i === 1 ? accentStyle : "" }, txt(w)), " ").flatMap((x) => [x, " "])),
     el("div", { class: "preset-name" }, label));
 }
 
 function captionsStep() {
   const p = state.project, c = p.captions, s = c.style;
   const changed = () => save(["captions"]);
-  const same = (st) => c.enabled !== false && st.font === s.font && st.highlight === s.highlight && st.color === s.color;
+  const same = (st) => c.enabled !== false && st.font === s.font && st.highlight === s.highlight && st.color === s.color
+    && (st.highlightStyle || "color") === (s.highlightStyle || "color");
   const grid = el("div", { class: "presets" },
     ...CAPTION_PRESETS.map((pr) => presetCard({
       label: pr.name, sample: "Your first home", font: pr.style.font, color: pr.style.color, accent: pr.style.highlight,
-      upper: pr.style.uppercase, on: same(pr.style),
+      upper: pr.style.uppercase, on: same(pr.style), box: pr.style.highlightStyle === "box", boxText: pr.style.boxText,
       onpick: () => { Object.assign(s, pr.style); c.enabled = true; changed(); refreshSheet(); },
     })),
     el("button", { class: `preset off${c.enabled === false ? " on" : ""}`, onclick: () => { c.enabled = false; changed(); refreshSheet(); } },
@@ -869,7 +964,8 @@ function captionsStep() {
       chips("Position", [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]],
         s.y < 0.35 ? "top" : s.y < 0.6 ? "middle" : "bottom",
         (v) => { s.y = { top: 0.2, middle: 0.5, bottom: 0.72 }[v]; s.x = 0.5; changed(); }),
-      slider("Size", { min: 32, max: 140, value: s.size || 66, oninput: (v) => { s.size = v; changed(); } }));
+      slider("Size", { min: 32, max: 140, value: s.size || 66, oninput: (v) => { s.size = v; changed(); } }),
+      fontPicker("Or choose a font", FONTS_CAPTION, s.font, (v) => { s.font = v; changed(); }));
     if ((c.lines || []).length) {
       const det = el("details", { class: "fix" }, el("summary", {}, "Fix a misspelled word"));
       det.append(captionLinesList());
@@ -915,6 +1011,7 @@ function headlineStep() {
       onpick: () => { Object.assign(h, { font: pr.font, color: pr.color, accent: pr.accent }); changed(); refreshSheet(); },
     }))),
     slider("Size", { min: 50, max: 320, value: h.size || 130, oninput: (v) => { h.size = v; changed(); } }),
+    fontPicker("Or choose a font", FONTS_HEADLINE, h.font, (v) => { h.font = v; changed(); }),
     toggle("Place behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); }),
     el("p", { class: "note" }, "Tip: drag the headline on the preview to move it, pinch to resize."),
   ];
@@ -1012,6 +1109,7 @@ async function boot() {
   try {
     state.status = await api("/api/status");
     state.settings = await api("/api/settings");
+    loadBrandFonts();
     await Promise.all(["Anton", "Bebas Neue", "Oswald", "Montserrat", "Poppins", "Playfair"].map((f) => document.fonts.load(`40px "${f}"`)));
     const last = recall("lp_project");
     if (last) {

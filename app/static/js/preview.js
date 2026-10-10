@@ -1,6 +1,6 @@
 // Live preview: draws the same layers as the exporter onto a canvas and lets
 // you drag / pinch the headline, captions and logo.
-import { brollAt, captionAt, cropRect, ease, parseHeadline, wrapWords } from "./timeline.js";
+import { brollAt, captionAt, cropRect, ease, effectiveCuts, keptSegments, nextKept, parseHeadline, wrapWords } from "./timeline.js";
 import { PersonMasker } from "./segment.js";
 
 const OW = 1080, OH = 1920;
@@ -114,12 +114,17 @@ export class Preview {
     this.gain.gain.setTargetAtTime(target, this.actx.currentTime, 0.12);
   }
 
+  segments() {
+    return this.p ? keptSegments(this.p.trim, effectiveCuts(this.p)) : [];
+  }
+
   play() {
     const p = this.p;
     if (!p) return;
-    if (this.video.currentTime < p.trim.start || this.video.currentTime >= p.trim.end - 0.05) {
-      this.video.currentTime = p.trim.start;
-    }
+    const segs = this.segments();
+    const nt = nextKept(segs, this.video.currentTime);
+    if (nt === null || this.video.currentTime >= p.trim.end - 0.05) this.video.currentTime = segs.length ? segs[0][0] : p.trim.start;
+    else if (nt > this.video.currentTime + 0.02) this.video.currentTime = nt;
     if (this.audio) this.wireAudio();
     this.primeBroll();
     this.video.play().catch(() => {});
@@ -143,10 +148,17 @@ export class Preview {
   loop() {
     if (this.video.paused) return;
     const p = this.p;
-    if (p && this.video.currentTime >= p.trim.end - 0.02) {
-      this.video.pause();
-      this.video.currentTime = p.trim.start;
-      return;
+    if (p) {
+      // Jump over cut-out parts (removed pauses, manual cuts); stop at the end.
+      const segs = this.segments();
+      const t = this.video.currentTime;
+      const nt = nextKept(segs, t);
+      if (nt === null || t >= p.trim.end - 0.02) {
+        this.video.pause();
+        this.video.currentTime = segs.length ? segs[0][0] : p.trim.start;
+        return;
+      }
+      if (nt > t + 0.02) this.video.currentTime = nt;
     }
     this.draw();
     this.syncMusic();
@@ -242,7 +254,7 @@ export class Preview {
     return this.metricsCache[font];
   }
 
-  drawLines(lines, font, cx, cy, lineH, colors, stroke = 0, strokeColor = "#000") {
+  drawLines(lines, font, cx, cy, lineH, colors, stroke = 0, strokeColor = "#000", box = null, size = 0) {
     const { ctx } = this;
     ctx.font = font;
     ctx.textBaseline = "alphabetic";
@@ -258,7 +270,15 @@ export class Preview {
       let x = cx - total / 2;
       x0 = Math.min(x0, x); x1 = Math.max(x1, x + total);
       for (const [word, key] of ln) {
-        if (stroke > 0) { ctx.lineWidth = stroke * 2; ctx.strokeStyle = strokeColor; ctx.strokeText(word, x, y); }
+        const wl = ctx.measureText(word).width;
+        if (box && key) {
+          const mid = y - off, r = size * 0.22;
+          ctx.fillStyle = box;
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(x - size * 0.18, mid - size * 0.62, wl + size * 0.36, size * 1.24, r);
+          else ctx.rect(x - size * 0.18, mid - size * 0.62, wl + size * 0.36, size * 1.24);
+          ctx.fill();
+        } else if (stroke > 0) { ctx.lineWidth = stroke * 2; ctx.strokeStyle = strokeColor; ctx.strokeText(word, x, y); }
         ctx.fillStyle = colors[key ? 1 : 0];
         ctx.fillText(word, x, y);
         x += ctx.measureText(word).width + space;
@@ -297,8 +317,10 @@ export class Preview {
     const stroke = Math.max(0, Math.floor((style.stroke ?? 7) * size / base));
     const keyed = [words.map((w, j) => [w, j === active])];
     this.ctx.globalAlpha = ghost ? 0.55 : 1;
+    const isBox = style.highlightStyle === "box";
     const box = this.drawLines(keyed, `${size * k}px "${family}"`, (style.x ?? 0.5) * this.CW, (style.y ?? 0.72) * this.CH,
-      size * 1.2 * k, [style.color || "#FFFFFF", style.highlight || "#F2C230"], stroke * k, style.strokeColor || "#000000");
+      size * 1.2 * k, [style.color || "#FFFFFF", isBox ? (style.boxText || "#FFFFFF") : (style.highlight || "#F2C230")],
+      stroke * k, style.strokeColor || "#000000", isBox ? (style.highlight || "#E3202A") : null, size * k);
     this.ctx.globalAlpha = 1;
     this.boxes.captions = box.map((v) => v / k);
   }

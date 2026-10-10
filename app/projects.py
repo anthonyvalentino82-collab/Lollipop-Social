@@ -12,7 +12,7 @@ from .pipeline import audio as audio_mod
 from .pipeline import broll as broll_mod
 from .pipeline import media
 from .pipeline.render import render_project
-from .pipeline.timeline import build_caption_lines
+from .pipeline.timeline import build_caption_lines, pause_cuts
 from .pipeline.transcribe import transcribe
 from .pipeline.vision import face_track
 from .pipeline.zoom import plan_zooms
@@ -120,7 +120,7 @@ def save(project: dict) -> dict:
     return project
 
 
-EDITABLE = {"trim", "captions", "headline", "logo", "zoom", "broll", "music", "audio"}
+EDITABLE = {"trim", "captions", "headline", "logo", "zoom", "broll", "music", "audio", "cuts", "removePauses"}
 
 
 def update(pid: str, patch: dict) -> dict:
@@ -169,6 +169,7 @@ def create(upload_name: str) -> tuple[dict, Path]:
         "faceTrack": [],
         "broll": [],
         "music": {"enabled": False, "file": None, "name": None, "volume": 0.25, "duck": True},
+        "cuts": [], "pauseCuts": [], "removePauses": True,
         "audio": {"clean": True},
         "autoEdited": False, "warnings": [],
     }
@@ -234,6 +235,14 @@ def auto_edit(pid: str, progress) -> dict:
         energy = audio_mod.word_energy(d / "voice16k.wav", words)
         segments = plan_zooms(words, energy, p["zoom"].get("intensity", "medium"))
 
+    # Pauses between sentences that "remove pauses" can cut out.
+    full = {"start": 0, "end": p["source"]["duration"]}
+    if words:
+        pauses = pause_cuts(words, full)
+    else:
+        pauses = [{"start": round(a + 0.15, 3), "end": round(b - 0.15, 3)}
+                  for a, b in audio_mod.detect_silences(d / "voice16k.wav") if b - a > 0.6]
+
     progress(0.65, "Choosing B-roll")
     broll = []
     clips = {c["tag"]: config.CLIPS_DIR / c["file"] for c in list_clips()}
@@ -268,6 +277,9 @@ def auto_edit(pid: str, progress) -> dict:
         p["faceTrack"] = track
         p["zoom"]["segments"] = segments
         p["broll"] = broll
+        p["pauseCuts"] = pauses
+        p.setdefault("removePauses", True)
+        p.setdefault("cuts", [])
         p["autoEdited"] = True
         p["warnings"] = warnings
         save(p)

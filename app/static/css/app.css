@@ -331,3 +331,14 @@ a.small-btn { color: var(--text); text-decoration: none; }
 .result-video video { max-width: 100%; max-height: 100%; aspect-ratio: 9 / 16; border-radius: 16px; background: #111; }
 .result-actions { display: flex; flex-direction: column; gap: 8px; max-width: 520px; width: 100%; margin: 0 auto; }
 body.result-open { overflow: hidden; }
+
+/* cuts on the trim strip */
+.cut-layer { position: absolute; inset: 0; pointer-events: none; border-radius: 8px; overflow: hidden; }
+.cutmark { position: absolute; top: 0; bottom: 0; }
+.cutmark.manual { background: rgba(227, 32, 42, .7); }
+.cutmark.auto { background: repeating-linear-gradient(135deg, rgba(0,0,0,.65) 0 4px, rgba(227,32,42,.35) 4px 8px); }
+.cutmark.pending { background: rgba(242, 194, 48, .55); }
+.section-title { font-weight: 800; font-size: 15px; margin-top: 6px; }
+.cut-btn { color: #ff9a9a; }
+.cut-row { font-size: 14px; font-variant-numeric: tabular-nums; }
+.chip.add-font { color: var(--gold); border-style: dashed; }

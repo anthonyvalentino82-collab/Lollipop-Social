@@ -137,3 +137,46 @@ def wrap_words(words: list, measure, max_width: float) -> list[list]:
     if cur:
         out.append(cur)
     return out
+
+
+# ---------- cuts (removed sections) ----------
+
+def effective_cuts(project: dict) -> list[dict]:
+    """Manual cuts plus the AI-found pauses (when 'remove pauses' is on)."""
+    cuts = list(project.get("cuts", []))
+    if project.get("removePauses", True):
+        cuts += project.get("pauseCuts", [])
+    return cuts
+
+
+def kept_segments(trim: dict, cuts: list[dict]) -> list[tuple[float, float]]:
+    """The parts of [trim.start, trim.end] that are NOT cut, in order."""
+    segs = [(float(trim["start"]), float(trim["end"]))]
+    for c in sorted(cuts, key=lambda c: c["start"]):
+        out = []
+        for a, b in segs:
+            if c["end"] <= a or c["start"] >= b:
+                out.append((a, b))
+                continue
+            if c["start"] > a:
+                out.append((a, c["start"]))
+            if c["end"] < b:
+                out.append((c["end"], b))
+        segs = out
+    return [(a, b) for a, b in segs if b - a >= 1 / 30]
+
+
+def pause_cuts(words: list[dict], trim: dict, min_gap: float = 0.6, pad: float = 0.15) -> list[dict]:
+    """Silences between spoken words that are long enough to remove."""
+    cuts = []
+    ws = [w for w in words if trim["start"] <= w["start"] < trim["end"]]
+    if not ws:
+        return cuts
+    if ws[0]["start"] - trim["start"] > min_gap:  # dead air before you start talking
+        cuts.append({"start": trim["start"], "end": round(ws[0]["start"] - 0.25, 3)})
+    for a, b in zip(ws, ws[1:]):
+        if b["start"] - a["end"] > min_gap:
+            cuts.append({"start": round(a["end"] + pad, 3), "end": round(b["start"] - pad, 3)})
+    if trim["end"] - ws[-1]["end"] > min_gap + 0.4:  # dead air after you finish
+        cuts.append({"start": round(ws[-1]["end"] + 0.4, 3), "end": trim["end"]})
+    return cuts

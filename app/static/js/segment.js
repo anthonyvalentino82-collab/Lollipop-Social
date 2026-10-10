@@ -59,12 +59,26 @@ export class PersonMasker {
           this.img.data.fill(255);
         }
         if (!this.prev) this.prev = new Float32Array(data);
-        const px = this.img.data;
+        if (!this.tmp || this.tmp.length !== data.length) { this.tmp = new Float32Array(data.length); this.tmp2 = new Float32Array(data.length); }
+        const a = this.tmp, b = this.tmp2;
         for (let i = 0; i < data.length; i++) {
           const v = 0.5 * this.prev[i] + 0.5 * data[i];
           this.prev[i] = v;
-          px[i * 4 + 3] = Math.max(0, Math.min(1, (v - 0.35) / 0.3)) * 255;
+          a[i] = Math.max(0, Math.min(1, (v - 0.3) / 0.4));
         }
+        // Two small blur passes so the edge around hair/shoulders is soft, not jagged.
+        for (let pass = 0; pass < 2; pass++) {
+          for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            const i = y * w + x;
+            b[i] = (a[i] * 2 + (x > 0 ? a[i - 1] : a[i]) + (x < w - 1 ? a[i + 1] : a[i])) / 4;
+          }
+          for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            const i = y * w + x;
+            a[i] = (b[i] * 2 + (y > 0 ? b[i - w] : b[i]) + (y < h - 1 ? b[i + w] : b[i])) / 4;
+          }
+        }
+        const px = this.img.data;
+        for (let i = 0; i < data.length; i++) px[i * 4 + 3] = a[i] * 255;
         this.mctx.putImageData(this.img, 0, 0);
       });
       return true;

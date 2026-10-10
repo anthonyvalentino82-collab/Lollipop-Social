@@ -84,7 +84,8 @@ def status():
 @app.get("/api/settings")
 def get_settings():
     s = projects.load_settings()
-    return {**s, "logos": projects.all_logos(s), "clips": projects.list_clips()}
+    from .pipeline.text import user_fonts
+    return {**s, "logos": projects.all_logos(s), "clips": projects.list_clips(), "fonts": user_fonts()}
 
 
 @app.put("/api/settings")
@@ -105,6 +106,52 @@ def add_logo(file: UploadFile = File(...), name: str = Form("My logo")):
     s = projects.load_settings()
     projects.save_settings({"logos": s["logos"] + [{"id": lid, "name": name[:40], "file": fname}]})
     return get_settings()
+
+
+@app.post("/api/fonts")
+def add_font(file: UploadFile = File(...), name: str = Form("")):
+    import json
+    from PIL import ImageFont
+    from .pipeline.text import FONTS, user_fonts
+    ext = Path(file.filename or "font.ttf").suffix.lower()
+    if ext not in (".ttf", ".otf"):
+        raise HTTPException(400, "Please upload a .ttf or .otf font file.")
+    fid = uuid.uuid4().hex[:8]
+    dst = config.USER_FONTS_DIR / f"{fid}{ext}"
+    _save_upload(file, dst)
+    try:
+        ImageFont.truetype(str(dst), 40)
+    except OSError:
+        dst.unlink(missing_ok=True)
+        raise HTTPException(400, "That file isn't a font we can read.")
+    name = re.sub(r"[^\w \-]", "", name or Path(file.filename or "My font").stem).strip()[:40] or "My font"
+    taken = set(FONTS) | {f["name"] for f in user_fonts()}
+    base, n = name, 2
+    while name in taken:
+        name, n = f"{base} {n}", n + 1
+    fonts = user_fonts() + [{"id": fid, "name": name, "file": dst.name}]
+    (config.USER_FONTS_DIR / "fonts.json").write_text(json.dumps(fonts, indent=2))
+    return get_settings()
+
+
+@app.delete("/api/fonts/{fid}")
+def delete_font(fid: str):
+    import json
+    from .pipeline.text import user_fonts
+    fonts = user_fonts()
+    for f in fonts:
+        if f["id"] == fid:
+            (config.USER_FONTS_DIR / f["file"]).unlink(missing_ok=True)
+    (config.USER_FONTS_DIR / "fonts.json").write_text(json.dumps([f for f in fonts if f["id"] != fid], indent=2))
+    return get_settings()
+
+
+@app.get("/files/fonts/{name}")
+def font_file(name: str):
+    f = (config.USER_FONTS_DIR / name).resolve()
+    if f.parent != config.USER_FONTS_DIR.resolve() or not f.is_file() or f.suffix not in (".ttf", ".otf"):
+        raise HTTPException(404)
+    return FileResponse(f, headers={"Cache-Control": "max-age=31536000"})
 
 
 @app.delete("/api/logos/{lid}")

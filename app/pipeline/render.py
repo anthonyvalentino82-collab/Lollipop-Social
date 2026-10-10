@@ -17,7 +17,7 @@ from PIL import Image
 from .. import config
 from . import audio as audio_mod
 from .text import caption_image, headline_layer
-from .timeline import broll_at, caption_at, crop_rect
+from .timeline import broll_at, caption_at, crop_rect, effective_cuts, kept_segments
 from .vision import PersonSegmenter
 
 W, H, FPS = config.OUT_W, config.OUT_H, config.OUT_FPS
@@ -93,6 +93,9 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
     end = float(project["trim"]["end"])
     dur = end - start
     n_frames = max(1, int(round(dur * FPS)))
+    segments = kept_segments(project["trim"], effective_cuts(project))
+    if not segments:
+        raise RuntimeError("Everything was cut out — undo a cut or the trim and try again.")
 
     # ---- audio ----
     progress(0.02, "Saving your video — preparing audio")
@@ -107,7 +110,7 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
             run(["ffmpeg", "-y", "-i", str(src), "-vn", "-ar", "48000", "-ac", "2", str(voice)])
     music = project.get("music", {})
     final_audio = pdir / "final_audio.m4a"
-    audio_mod.mix_final(voice, final_audio, start, end,
+    audio_mod.mix_final(voice, final_audio, segments,
                         music=music_path if music.get("enabled", True) else None,
                         music_volume=float(music.get("volume", 0.25)), duck=music.get("duck", True))
 
@@ -143,16 +146,26 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
     dec = _Decoder(src, sw, sh, start, dur)
     broll_dec, broll_cur = None, None
     cap_cache: dict = {}
+    seg_i, last_t = 0, None
     try:
         for i in range(n_frames):
             t = start + i / FPS
             src_frame = dec.read()
             if src_frame is None:
                 raise RuntimeError("Could not read the source video.")
+            # Skip frames inside cut-out sections (trim + manual cuts + removed pauses).
+            while seg_i < len(segments) and t >= segments[seg_i][1]:
+                seg_i += 1
+            if seg_i >= len(segments):
+                break
+            if t < segments[seg_i][0]:
+                continue
+            jumped = last_t is not None and t - last_t > 1.5 / FPS
+            last_t = t
 
             b = broll_at(broll, t)
             if b is not None and (pdir / b["file"]).exists():
-                if broll_cur is not b:
+                if broll_cur is not b or jumped:
                     if broll_dec:
                         broll_dec.close()
                     broll_dec = _Decoder(pdir / b["file"], W, H, max(0.0, t - b["start"]))

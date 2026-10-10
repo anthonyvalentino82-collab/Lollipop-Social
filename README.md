@@ -16,11 +16,13 @@
 | Auto audio | High-pass, FFT noise reduction, presence EQ, compression, −16 LUFS loudness | ffmpeg |
 | Auto B-roll | Picks moments from the transcript and fetches portrait stock footage (or your own tagged clips); your voice keeps playing | Pixabay and/or Pexels (+ optional Claude for picking moments) |
 | Music | Your audio file, looped, faded, and **ducked under your voice** with a sidechain compressor; volume control | ffmpeg |
+| Cut & remove pauses | Cut any section out of the middle on the filmstrip; AI removes dead air between sentences (toggle) | built-in |
+| Brand fonts | Upload your own .ttf/.otf fonts for captions and headlines | built-in |
 
 Export: **1080×1920, 30 fps, H.264 High / AAC MP4** with faststart. It's ready for Photos, iMessage, Instagram, TikTok, Facebook, LinkedIn and YouTube Shorts. The headline and captions are separate layers in both the preview and the export.
 
 ## Interface
-One screen: preview · **TRIM | CAPTIONS | HEADLINE | LOGO | MUSIC | ZOOM** · **AUTO EDIT** · **SAVE VIDEO**. An Auto B-roll strip (Keep / Remove / Swap) appears after Auto Edit.
+One screen: preview · ▶ · **✨ AI Edit** (analysis, then 7 guided steps: trim & cut, caption style, headline, logo, zoom, B-roll, music) · **Save Video** (full-screen result with Save to iPhone). Manual tools live under "Fine-tune manually".
 
 ## How it's built
 - `app/main.py`: FastAPI web server and API (an optional password protects everything).

@@ -24,13 +24,21 @@ def clean_voice(src: Path, dst: Path, duration: float = 0, on_progress=lambda f:
                        "-ar", "48000", "-ac", "2", str(dst)], duration, on_progress)
 
 
-def mix_final(voice: Path, dst: Path, start: float, end: float,
+def mix_final(voice: Path, dst: Path, segments: list[tuple[float, float]],
               music: Path | None = None, music_volume: float = 0.25, duck: bool = True) -> None:
-    """Trim the voice to [start, end] and optionally lay music under it.
-    Music loops if it is too short, fades out at the end, and is pushed down
-    automatically whenever the voice is present (sidechain ducking)."""
-    dur = max(0.1, end - start)
-    voice_f = f"[0:a]atrim=start={start:.3f}:end={end:.3f},asetpts=PTS-STARTPTS"
+    """Join the kept parts of the voice (trim + cuts) and optionally lay music under it.
+    Each joint gets a 15 ms fade so cuts don't click. Music loops if it is too short,
+    fades out at the end, and is pushed down whenever the voice is present (ducking)."""
+    segments = segments or [(0.0, 0.1)]
+    dur = max(0.1, sum(b - a for a, b in segments))
+    parts = []
+    for k, (a, b) in enumerate(segments):
+        ln = b - a
+        f = min(0.015, ln / 4)
+        parts.append(f"[0:a]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS,"
+                     f"afade=t=in:d={f:.3f},afade=t=out:st={max(0, ln - f):.3f}:d={f:.3f}[s{k}]")
+    joined = "".join(f"[s{k}]" for k in range(len(segments)))
+    voice_f = ";".join(parts) + f";{joined}concat=n={len(segments)}:v=0:a=1"
     if not music:
         run(["ffmpeg", "-y", "-i", str(voice), "-filter_complex", voice_f + "[out]",
              "-map", "[out]", "-c:a", "aac", "-b:a", "192k", str(dst)])
@@ -49,6 +57,17 @@ def mix_final(voice: Path, dst: Path, start: float, end: float,
     run(["ffmpeg", "-y", "-i", str(voice), "-stream_loop", "-1", "-i", str(music),
          "-filter_complex", graph, "-map", "[out]", "-t", f"{dur:.3f}",
          "-c:a", "aac", "-b:a", "192k", str(dst)])
+
+
+def detect_silences(wav: Path, min_len: float = 0.7, noise_db: int = -35) -> list[tuple[float, float]]:
+    """Quiet stretches (used to find pauses when there is no transcript)."""
+    import re
+    import subprocess
+    proc = subprocess.run(["ffmpeg", "-i", str(wav), "-af", f"silencedetect=noise={noise_db}dB:d={min_len}",
+                           "-f", "null", "-"], capture_output=True, text=True)
+    starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", proc.stderr)]
+    ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", proc.stderr)]
+    return list(zip(starts, ends))
 
 
 def word_energy(wav16k: Path, words: list[dict]) -> list[float]:

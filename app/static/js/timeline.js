@@ -116,3 +116,53 @@ export function retimeLine(line, text) {
   });
   return { ...line, words };
 }
+
+// ---------- cuts (mirror of timeline.py) ----------
+export function effectiveCuts(p) {
+  return [...(p.cuts || []), ...(p.removePauses !== false ? p.pauseCuts || [] : [])];
+}
+
+export function keptSegments(trim, cuts) {
+  let segs = [[+trim.start, +trim.end]];
+  for (const c of [...cuts].sort((a, b) => a.start - b.start)) {
+    const out = [];
+    for (const [a, b] of segs) {
+      if (c.end <= a || c.start >= b) { out.push([a, b]); continue; }
+      if (c.start > a) out.push([a, c.start]);
+      if (c.end < b) out.push([c.end, b]);
+    }
+    segs = out;
+  }
+  return segs.filter(([a, b]) => b - a >= 1 / 30);
+}
+
+export const keptDuration = (segs) => segs.reduce((n, [a, b]) => n + (b - a), 0);
+
+// source time -> position in the finished video (seconds)
+export function srcToOut(segs, t) {
+  let o = 0;
+  for (const [a, b] of segs) {
+    if (t < a) return o;
+    if (t <= b) return o + (t - a);
+    o += b - a;
+  }
+  return o;
+}
+
+// position in the finished video -> source time
+export function outToSrc(segs, o) {
+  for (const [a, b] of segs) {
+    if (o <= b - a) return a + o;
+    o -= b - a;
+  }
+  return segs.length ? segs[segs.length - 1][1] : 0;
+}
+
+// If t is inside a removed part, the source time playback should jump to (or null = end).
+export function nextKept(segs, t) {
+  for (const [a, b] of segs) {
+    if (t < a) return a;
+    if (t < b) return t;
+  }
+  return null;
+}

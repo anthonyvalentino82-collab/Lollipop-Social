@@ -11,7 +11,8 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", APP_DIR.parent / "data")).resolve()
 PROJECTS_DIR = DATA_DIR / "projects"
 LOGOS_DIR = DATA_DIR / "logos"
 CLIPS_DIR = DATA_DIR / "clips"
-for d in (PROJECTS_DIR, LOGOS_DIR, CLIPS_DIR):
+USER_FONTS_DIR = DATA_DIR / "fonts"
+for d in (PROJECTS_DIR, LOGOS_DIR, CLIPS_DIR, USER_FONTS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 # Optional password protecting the whole app (strongly recommended once online).
