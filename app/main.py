@@ -33,7 +33,11 @@ async def require_password(request: Request, call_next):
     if config.APP_PASSWORD and not public:
         if not hmac.compare_digest(request.cookies.get(AUTH_COOKIE, ""), _token()):
             return JSONResponse({"detail": "login required"}, status_code=401)
-    return await call_next(request)
+    response = await call_next(request)
+    # Make phones re-check the app's code on every visit so updates show up right away.
+    if path == "/" or path.startswith(("/static/js/", "/static/css/")):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 def _save_upload(upload: UploadFile, dst: Path) -> None:

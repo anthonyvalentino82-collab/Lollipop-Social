@@ -7,7 +7,7 @@ video.playsInline = true;
 video.setAttribute("playsinline", "");
 video.preload = "auto";
 
-const state = { project: null, settings: null, status: null, sheet: null, exportUrl: null };
+const state = { project: null, settings: null, status: null, sheet: null, wizard: null, exportUrl: null };
 const FONTS_CAPTION = ["Montserrat", "Anton", "Bebas Neue", "Poppins", "Oswald", "Playfair"];
 const FONTS_HEADLINE = ["Anton", "Bebas Neue", "Oswald", "Montserrat", "Playfair"];
 const TEXT_COLORS = ["#FFFFFF", "#E9E1D3", "#F2C230", "#E3202A", "#111111", "#C4C4C4"];
@@ -91,7 +91,7 @@ function busy(msg, p) {
 const preview = new Preview($("canvas"), video, {
   onChange: (key) => save(key === "logo" ? ["logo"] : key === "headline" ? ["headline"] : ["captions"]),
   onTap: (key) => {
-    if (key) openSheet(key);
+    if (key) { if (state.wizard == null) openSheet(key); } // during AI Edit, tapping just selects for dragging
     else if (video.paused) preview.play(); else preview.pause();
   },
   onTime: (t) => updateScrub(t),
@@ -165,9 +165,10 @@ async function openProject(p) {
   $("playBtn").hidden = false;
   document.querySelectorAll(".tools button").forEach((b) => (b.disabled = false));
   $("btnAuto").disabled = false;
-  $("btnSave").disabled = false;
   $("btnAuto").classList.toggle("done", !!p.autoEdited);
-  $("btnAutoLabel").textContent = p.autoEdited ? "Auto Edited ✓  Tap to redo" : "Auto Edit";
+  $("btnAutoLabel").textContent = p.autoEdited ? "AI Edit — walk through again" : "AI Edit";
+  $("btnSave").hidden = !p.autoEdited;
+  $("btnFine").hidden = !p.autoEdited;
   renderBroll();
   renderWarnings();
   markTools();
@@ -200,11 +201,12 @@ function resetToEmpty() {
   state.project = null;
   store("lp_project", null);
   $("empty").hidden = false;
-  ["scrub", "hint", "brollStrip", "warnings", "playBtn", "btnNew"].forEach((id) => ($(id).hidden = true));
+  ["scrub", "hint", "brollStrip", "warnings", "playBtn", "btnNew", "btnSave", "btnFine", "fineTune"].forEach((id) => ($(id).hidden = true));
   document.querySelectorAll(".tools button").forEach((b) => (b.disabled = true));
-  $("btnAuto").disabled = $("btnSave").disabled = true;
+  $("btnAuto").disabled = true;
   $("btnAuto").classList.remove("done");
-  $("btnAutoLabel").textContent = "Auto Edit";
+  $("btnSave").classList.remove("ready");
+  $("btnAutoLabel").textContent = "AI Edit";
   const c = $("canvas"); c.getContext("2d").clearRect(0, 0, c.width, c.height);
   preview.setProject(null);
   preview.setMusic(null);
@@ -221,7 +223,7 @@ async function handleVideoFile(file) {
     const p = await api(`/api/projects/${res.project.id}`);
     busy(null);
     await openProject(p);
-    toast("Video ready! Tap Auto Edit ✨");
+    toast("Video ready! Tap ✨ AI Edit");
   } catch (e) {
     busy(null);
     if (!(e instanceof AuthError)) toast(e.message, 5000);
@@ -231,25 +233,42 @@ $("inRecord").addEventListener("change", (e) => { handleVideoFile(e.target.files
 $("inUpload").addEventListener("change", (e) => { handleVideoFile(e.target.files[0]); e.target.value = ""; });
 $("btnNew").addEventListener("click", () => { if (confirm("Start a new video? (This one stays saved on the server for 14 days.)")) resetToEmpty(); });
 
-// ---------- auto edit ----------
+// ---------- AI edit (analysis + guided steps) ----------
+async function runAnalysis() {
+  const p = state.project;
+  preview.pause();
+  closeSheet();
+  await flush();
+  busy("Starting AI Edit…", 0);
+  const job = await api(`/api/projects/${p.id}/auto-edit`, { method: "POST" });
+  await waitJob(job, (j) => busy(j.message, j.progress));
+  const fresh = await api(`/api/projects/${p.id}`);
+  busy(null);
+  await openProject(fresh);
+}
+
 $("btnAuto").addEventListener("click", async () => {
   const p = state.project;
   if (!p) return;
-  if (p.autoEdited && !confirm("Run Auto Edit again? This replaces your captions, zooms and B-roll (your headline, logo and music stay).")) return;
-  preview.pause();
-  await flush();
   try {
-    busy("Starting Auto Edit…", 0);
-    const job = await api(`/api/projects/${p.id}/auto-edit`, { method: "POST" });
-    await waitJob(job, (j) => busy(j.message, j.progress));
-    const fresh = await api(`/api/projects/${p.id}`);
-    busy(null);
-    await openProject(fresh);
-    toast(fresh.warnings?.length ? "Auto edit done (see notes below)" : "Auto edit complete ✨");
+    if (!p.autoEdited) await runAnalysis();
+    showStep(0);
   } catch (e) {
     busy(null);
     if (!(e instanceof AuthError)) toast(e.message, 5000);
   }
+});
+
+$("btnReanalyze").addEventListener("click", async () => {
+  if (!confirm("Re-run the AI analysis? This replaces your captions, zooms and B-roll (your headline, logo and music stay).")) return;
+  try { await runAnalysis(); showStep(0); }
+  catch (e) { busy(null); if (!(e instanceof AuthError)) toast(e.message, 5000); }
+});
+
+$("btnFine").addEventListener("click", () => {
+  const open = $("fineTune").hidden;
+  $("fineTune").hidden = !open;
+  $("btnFine").textContent = open ? "Hide manual controls ▴" : "Fine-tune manually ▾";
 });
 
 // ---------- save / export ----------
@@ -331,6 +350,7 @@ async function swapBroll(b) {
     await waitJob(job, (j) => busy(j.message, j.progress));
     busy(null);
     await openProject(await api(`/api/projects/${p.id}`));
+    refreshSheet();
   } catch (e) { busy(null); if (!(e instanceof AuthError)) toast(e.message, 4000); }
 }
 
@@ -341,6 +361,7 @@ function closeSheet() {
   $("sheet").hidden = true;
   document.body.classList.remove("sheet-open");
   state.sheet = null;
+  state.wizard = null;
   preview.ghostCaptions = false;
   preview.draw();
   markTools();
@@ -348,21 +369,82 @@ function closeSheet() {
 $("sheetDone").addEventListener("click", closeSheet);
 
 const TITLES = { trim: "Trim", captions: "Captions", headline: "Cinematic Headline", logo: "Logo", music: "Music & Voice", zoom: "Auto Zoom", clips: "My B-roll clips" };
+const BUILDERS = { trim: () => trimSheet(), captions: () => captionsSheet(), headline: () => headlineSheet(), logo: () => logoSheet(), music: () => musicSheet(), zoom: () => zoomSheet(), clips: () => clipsSheet() };
 
-function openSheet(tool, title, content) {
-  if (!state.project && tool !== "clips") return;
-  state.sheet = tool;
-  $("sheetTitle").textContent = title || TITLES[tool] || "";
+function renderSheet({ key, title, step, content, footer }) {
+  state.sheet = key;
+  $("sheetTitle").textContent = title || "";
+  $("sheetStep").hidden = !step;
+  $("sheetStep").textContent = step || "";
   const body = $("sheetBody");
+  const keepScroll = body.dataset.key === key ? body.scrollTop : 0;
+  body.dataset.key = key;
   body.innerHTML = "";
-  preview.ghostCaptions = tool === "captions";
-  const builders = { trim: trimSheet, captions: captionsSheet, headline: headlineSheet, logo: logoSheet, music: musicSheet, zoom: zoomSheet, clips: clipsSheet };
-  body.append(...(content || builders[tool]()).filter(Boolean));
+  body.append(...content.filter(Boolean));
+  body.scrollTop = keepScroll;
+  const foot = $("sheetFoot");
+  foot.innerHTML = "";
+  foot.hidden = !footer;
+  if (footer) foot.append(...footer.filter(Boolean));
+  preview.ghostCaptions = key === "captions";
   window.scrollTo({ top: 0, behavior: "smooth" });
   document.body.classList.add("sheet-open");
   $("sheet").hidden = false; // no backdrop: the preview stays draggable while a panel is open
   preview.draw();
 }
+
+function openSheet(tool, title, content) {
+  if (!state.project && tool !== "clips") return;
+  state.wizard = null;
+  renderSheet({ key: tool, title: title || TITLES[tool], content: content || BUILDERS[tool]() });
+}
+
+function refreshSheet() {
+  if (state.wizard != null) showStep(state.wizard);
+  else if (state.sheet && BUILDERS[state.sheet]) openSheet(state.sheet);
+}
+
+// The guided AI Edit: one simple choice per screen, then watch and save.
+const STEPS = [
+  { key: "trim", title: "Trim the start & end", build: () => trimSheet() },
+  { key: "captions", title: "Pick a caption style", build: () => captionsStep() },
+  { key: "headline", title: "Add a headline", build: () => headlineStep() },
+  { key: "logo", title: "Your logo", build: () => logoSheet() },
+  { key: "zoom", title: "Auto zoom", build: () => zoomStep() },
+  { key: "broll", title: "B-roll clips", build: () => brollStep() },
+  { key: "music", title: "Background music", build: () => musicSheet() },
+];
+
+function showStep(i) {
+  if (!state.project) return;
+  preview.pause();
+  state.wizard = i;
+  const st = STEPS[i], last = i === STEPS.length - 1;
+  renderSheet({
+    key: st.key, title: st.title, step: `Step ${i + 1} of ${STEPS.length}`,
+    content: st.build(),
+    footer: [
+      el("div", { class: "dots" }, ...STEPS.map((_, j) => el("span", { class: j === i ? "on" : j < i ? "done" : "" }))),
+      el("div", { class: "foot-btns" },
+        i > 0 ? el("button", { class: "small-btn", onclick: () => showStep(i - 1) }, "‹ Back") : el("span"),
+        el("button", { class: "btn btn-primary next-btn", onclick: () => (last ? finishWizard() : showStep(i + 1)) },
+          last ? "See my video ✨" : "Next ›")),
+    ],
+  });
+}
+
+async function finishWizard() {
+  closeSheet();
+  await flush();
+  const p = state.project;
+  $("btnSave").hidden = false;
+  $("btnSave").classList.add("ready");
+  $("btnFine").hidden = false;
+  video.currentTime = p.trim.start;
+  preview.play(); // this tap counts as permission to play with sound
+  toast("Here's your video! Like it? Tap Save Video.", 4000);
+}
+
 document.querySelectorAll(".tools button").forEach((b) => b.addEventListener("click", () => openSheet(b.dataset.tool)));
 
 // small UI builders
@@ -491,7 +573,7 @@ function trimSheet() {
     el("div", { class: "grid2" },
       el("button", { class: "small-btn", onclick: () => { p.trim.start = +Math.min(video.currentTime, p.trim.end - MIN).toFixed(2); paint(); save(["trim"]); } }, "Start at playhead"),
       el("button", { class: "small-btn", onclick: () => { p.trim.end = +Math.max(video.currentTime, p.trim.start + MIN).toFixed(2); paint(); save(["trim"]); } }, "End at playhead")),
-    el("button", { class: "small-btn wide", onclick: () => { p.trim = { start: 0, end: dur }; save(["trim"]); openSheet("trim"); } }, "Reset trim"),
+    el("button", { class: "small-btn wide", onclick: () => { p.trim = { start: 0, end: dur }; save(["trim"]); refreshSheet(); } }, "Reset trim"),
   ];
 }
 
@@ -522,28 +604,13 @@ function captionsSheet() {
       s.maxWords = n;
       const words = (c.lines || []).flatMap((l) => l.words);
       c.lines = buildCaptionLines(words, n);
-      changed(); openSheet("captions");
+      changed(); refreshSheet();
     }),
     chips("Animation", [["pop", "Pop"], ["none", "None"]], s.animation || "pop", (v) => { s.animation = v; changed(); }),
     toggle("ALL CAPS", s.uppercase !== false, (v) => { s.uppercase = v; changed(); }),
   );
   if ((c.lines || []).length) {
-    const list = el("div", { class: "cap-lines" });
-    captionRows = [];
-    c.lines.forEach((line, i) => {
-      const input = el("input", { type: "text", value: line.words.map((w) => w.w).join(" "), enterkeyhint: "done" });
-      input.addEventListener("focus", () => { preview.pause(); video.currentTime = line.start + 0.01; });
-      input.addEventListener("change", () => {
-        const updated = retimeLine(line, input.value);
-        if (updated) c.lines[i] = updated; else c.lines.splice(i, 1);
-        changed();
-        if (!updated) openSheet("captions");
-      });
-      const row = el("div", { class: "cap-line" }, el("span", { class: "t" }, fmt(line.start - p.trim.start)), input);
-      captionRows.push({ row, line });
-      list.append(row);
-    });
-    out.push(el("div", { class: "field" }, el("label", { class: "label" }, "Fix words (tap a line to jump there; clear it to delete)"), list));
+    out.push(el("div", { class: "field" }, el("label", { class: "label" }, "Fix words (tap a line to jump there; clear it to delete)"), captionLinesList()));
   }
   return out;
 }
@@ -575,14 +642,14 @@ function logoSheet() {
   const changed = () => save(["logo"]);
   const grid = el("div", { class: "logos" });
   for (const opt of state.settings.logos) {
-    grid.append(el("div", { class: `logo-opt${opt.id === l.id ? " on" : ""}`, onclick: () => { l.id = opt.id; l.enabled = true; preview.setLogo(opt.url); changed(); openSheet("logo"); } },
+    grid.append(el("div", { class: `logo-opt${opt.id === l.id ? " on" : ""}`, onclick: () => { l.id = opt.id; l.enabled = true; preview.setLogo(opt.url); changed(); refreshSheet(); } },
       el("img", { src: opt.url, alt: opt.name }),
       opt.builtin ? null : el("button", { class: "x", onclick: async (e) => {
         e.stopPropagation();
         if (!confirm(`Delete “${opt.name}”?`)) return;
         state.settings = await api(`/api/logos/${opt.id}`, { method: "DELETE" });
         if (l.id === opt.id) { l.id = "lollipop"; preview.setLogo(logoUrl("lollipop")); changed(); }
-        openSheet("logo");
+        refreshSheet();
       } }, "×")));
   }
   const inp = el("input", { type: "file", accept: "image/png,image/jpeg,image/webp", hidden: true });
@@ -594,7 +661,7 @@ function logoSheet() {
       state.settings = await upload("/api/logos", { file: f, name });
       const added = state.settings.logos[state.settings.logos.length - 1];
       l.id = added.id; l.enabled = true;
-      preview.setLogo(added.url); changed(); openSheet("logo");
+      preview.setLogo(added.url); changed(); refreshSheet();
     } catch (e) { toast(e.message); }
   });
   grid.append(el("label", { class: "logo-opt logo-add" }, inp, "+ Add logo"));
@@ -628,7 +695,7 @@ function musicSheet() {
       busy(null);
       p.music = fresh.music;
       preview.setMusic(`/files/projects/${p.id}/${p.music.file}?v=${Date.now()}`);
-      openSheet("music");
+      refreshSheet();
       toast("Music added — press play to hear it.");
     } catch (e) { busy(null); toast(e.message); }
   });
@@ -664,6 +731,147 @@ function zoomSheet() {
   ];
 }
 
+// ----- guided-step builders -----
+const CAPTION_PRESETS = [
+  { name: "Bold Pop", style: { font: "Montserrat", color: "#FFFFFF", highlight: "#F2C230", stroke: 7, uppercase: true, animation: "pop", size: 66 } },
+  { name: "LolliPOP Red", style: { font: "Anton", color: "#FFFFFF", highlight: "#E3202A", stroke: 7, uppercase: true, animation: "pop", size: 78 } },
+  { name: "News", style: { font: "Oswald", color: "#FFFFFF", highlight: "#E3202A", stroke: 6, uppercase: true, animation: "pop", size: 72 } },
+  { name: "Clean", style: { font: "Poppins", color: "#FFFFFF", highlight: "#FFFFFF", stroke: 5, uppercase: false, animation: "none", size: 58 } },
+  { name: "Elegant", style: { font: "Playfair", color: "#F4EFE9", highlight: "#F2C230", stroke: 6, uppercase: false, animation: "pop", size: 70 } },
+];
+const HEADLINE_PRESETS = [
+  { name: "Cinematic", font: "Anton", color: "#E9E1D3", accent: "#D7262E" },
+  { name: "Bold Gold", font: "Bebas Neue", color: "#FFFFFF", accent: "#F2C230" },
+  { name: "Classic", font: "Playfair", color: "#F4EFE9", accent: "#E3202A" },
+  { name: "Modern", font: "Montserrat", color: "#FFFFFF", accent: "#E3202A" },
+];
+
+function presetCard({ label, sample, font, color, accent, upper, on, onpick }) {
+  const words = sample.split(" ");
+  const txt = (w) => (upper ? w.toUpperCase() : w);
+  return el("button", { class: `preset${on ? " on" : ""}`, onclick: onpick },
+    el("div", { class: "preset-sample", style: `font-family:"${font}";color:${color}` },
+      ...words.map((w, i) => el("span", { style: i === 1 ? `color:${accent}` : "" }, txt(w) + " "))),
+    el("div", { class: "preset-name" }, label));
+}
+
+function captionsStep() {
+  const p = state.project, c = p.captions, s = c.style;
+  const changed = () => save(["captions"]);
+  const same = (st) => c.enabled !== false && st.font === s.font && st.highlight === s.highlight && st.color === s.color;
+  const grid = el("div", { class: "presets" },
+    ...CAPTION_PRESETS.map((pr) => presetCard({
+      label: pr.name, sample: "Your first home", font: pr.style.font, color: pr.style.color, accent: pr.style.highlight,
+      upper: pr.style.uppercase, on: same(pr.style),
+      onpick: () => { Object.assign(s, pr.style); c.enabled = true; changed(); refreshSheet(); },
+    })),
+    el("button", { class: `preset off${c.enabled === false ? " on" : ""}`, onclick: () => { c.enabled = false; changed(); refreshSheet(); } },
+      el("div", { class: "preset-sample" }, "—"), el("div", { class: "preset-name" }, "No captions")));
+  const out = [];
+  if (!(c.lines || []).length) {
+    out.push(el("p", { class: "note warn" }, "No speech was transcribed, so there are no captions to show. (Check the yellow note on the main screen.)"));
+  }
+  out.push(grid);
+  if (c.enabled !== false) {
+    out.push(
+      chips("Position", [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]],
+        s.y < 0.35 ? "top" : s.y < 0.6 ? "middle" : "bottom",
+        (v) => { s.y = { top: 0.2, middle: 0.5, bottom: 0.72 }[v]; s.x = 0.5; changed(); }),
+      slider("Size", { min: 32, max: 140, value: s.size || 66, oninput: (v) => { s.size = v; changed(); } }));
+    if ((c.lines || []).length) {
+      const det = el("details", { class: "fix" }, el("summary", {}, "Fix a misspelled word"));
+      det.append(captionLinesList());
+      out.push(det);
+    }
+  }
+  return out;
+}
+
+function captionLinesList() {
+  const p = state.project, c = p.captions;
+  const list = el("div", { class: "cap-lines" });
+  captionRows = [];
+  c.lines.forEach((line, i) => {
+    const input = el("input", { type: "text", value: line.words.map((w) => w.w).join(" "), enterkeyhint: "done" });
+    input.addEventListener("focus", () => { preview.pause(); video.currentTime = line.start + 0.01; });
+    input.addEventListener("change", () => {
+      const updated = retimeLine(line, input.value);
+      if (updated) c.lines[i] = updated; else c.lines.splice(i, 1);
+      save(["captions"]);
+      if (!updated) refreshSheet();
+    });
+    const row = el("div", { class: "cap-line" }, el("span", { class: "t" }, fmt(line.start - p.trim.start)), input);
+    captionRows.push({ row, line });
+    list.append(row);
+  });
+  return list;
+}
+
+function headlineStep() {
+  const h = state.project.headline;
+  const changed = () => { save(["headline"]); if (preview.needsMask()) preview.ensureMasker(); };
+  const ta = el("textarea", { rows: 2, placeholder: "YOUR *FIRST HOME*\nSTARTS HERE" });
+  ta.value = h.text || "";
+  ta.addEventListener("input", () => { h.text = ta.value; h.enabled = !!h.text.trim(); changed(); });
+  const sample = (h.text || "").replace(/\*/g, "").split(/\s+/).filter(Boolean).slice(0, 3).join(" ") || "Big news today";
+  return [
+    el("p", { class: "note" }, "Type a short headline that sits behind you (optional — leave it empty to skip). Put *stars* around words to color them."),
+    ta,
+    el("div", { class: "presets" }, ...HEADLINE_PRESETS.map((pr) => presetCard({
+      label: pr.name, sample, font: pr.font, color: pr.color, accent: pr.accent, upper: true,
+      on: h.font === pr.font && h.accent === pr.accent,
+      onpick: () => { Object.assign(h, { font: pr.font, color: pr.color, accent: pr.accent }); changed(); refreshSheet(); },
+    }))),
+    slider("Size", { min: 50, max: 320, value: h.size || 130, oninput: (v) => { h.size = v; changed(); } }),
+    toggle("Place behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); }),
+    el("p", { class: "note" }, "Tip: drag the headline on the preview to move it, pinch to resize."),
+  ];
+}
+
+function zoomStep() {
+  const z = state.project.zoom;
+  const n = (z.segments || []).length;
+  const cur = z.enabled === false ? "off" : z.intensity || "medium";
+  return [
+    el("p", { class: "note" }, n
+      ? `AI found ${n} moment${n === 1 ? "" : "s"} where you emphasize a word. Pick how strong the zoom-in should be.`
+      : "No zoom moments were found in this video."),
+    chips(null, [["off", "Off"], ["subtle", "Subtle"], ["medium", "Medium"], ["strong", "Strong"]], cur, (v) => {
+      if (v === "off") z.enabled = false;
+      else {
+        const old = INTENSITY[z.intensity || "medium"], nu = INTENSITY[v];
+        for (const s of z.segments || []) s.scale = +(nu + (s.scale - old)).toFixed(3);
+        z.intensity = v; z.enabled = true;
+      }
+      save(["zoom"]);
+    }),
+  ];
+}
+
+function brollStep() {
+  const p = state.project;
+  const base = `/files/projects/${p.id}`;
+  const list = p.broll || [];
+  if (!list.length) {
+    return [el("p", { class: "note" }, state.status?.stock
+      ? "No good B-roll moments were found in this video. That's OK — tap Next."
+      : "B-roll is off. Add a Pixabay key in Render, or upload your own clips under “My clips”.")];
+  }
+  return [
+    el("p", { class: "note" }, "AI picked these clips to show while you talk. Tap one to preview it. Remove any you don't like, or Swap for a different clip."),
+    el("div", { class: "bgrid" }, ...list.map((b) => el("div", { class: `bclip${b.removed ? " removed" : ""}` },
+      el("div", { class: "bclip-thumb", onclick: () => { preview.pause(); video.currentTime = b.start + 0.05; } },
+        el("img", { src: `${base}/${b.thumb}`, alt: "" }),
+        el("span", { class: "bclip-time" }, fmt(b.start - p.trim.start))),
+      el("div", { class: "bclip-q" }, b.query),
+      el("div", { class: "bclip-actions" },
+        b.removed
+          ? el("button", { class: "keep", onclick: () => { b.removed = false; save(["broll"]); renderBroll(); refreshSheet(); } }, "Keep")
+          : el("button", { class: "remove", onclick: () => { b.removed = true; save(["broll"]); renderBroll(); refreshSheet(); } }, "Remove"),
+        b.source === "stock" ? el("button", { onclick: () => swapBroll(b) }, "Swap") : null)))),
+  ];
+}
+
 // ----- MY CLIPS (b-roll library) -----
 function clipsSheet() {
   const clips = state.settings?.clips || [];
@@ -678,7 +886,7 @@ function clipsSheet() {
       await upload("/api/clips", { file: f, tag: tag.value }, (x) => busy(`Uploading clip… ${Math.round(x * 100)}%`, x));
       busy(null);
       state.settings = await api("/api/settings");
-      openSheet("clips");
+      refreshSheet();
       toast("Clip saved. It will be used when you say that topic.");
     } catch (e) { busy(null); toast(e.message); }
   });
@@ -690,7 +898,7 @@ function clipsSheet() {
       el("button", { class: "link", onclick: async () => {
         await api(`/api/clips/${c.id}`, { method: "DELETE" });
         state.settings = await api("/api/settings");
-        openSheet("clips");
+        refreshSheet();
       } }, "Delete"))),
   ];
 }
