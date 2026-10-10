@@ -310,7 +310,8 @@ async function openProject(p) {
   state.project = p;
   store("lp_project", p.id);
   const base = `/files/projects/${p.id}`;
-  $("empty").hidden = true;
+  $("hero").hidden = true;
+  $("stageWrap").hidden = false;
   $("scrub").hidden = false;
   $("hint").hidden = false;
   $("btnNew").hidden = false;
@@ -363,7 +364,8 @@ function resetToEmpty() {
   video.load();
   state.project = null;
   store("lp_project", null);
-  $("empty").hidden = false;
+  $("hero").hidden = false;
+  $("stageWrap").hidden = true;
   ["scrub", "hint", "brollStrip", "warnings", "btnNew", "btnSave", "btnFine", "fineTune"].forEach((id) => ($(id).hidden = true));
   setSize("m");
   document.querySelectorAll(".tools button").forEach((b) => (b.disabled = true));

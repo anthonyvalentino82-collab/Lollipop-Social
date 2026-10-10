@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
   <link rel="icon" href="/static/brand/favicon.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=21">
+  <link rel="stylesheet" href="/static/css/app.css?v=25">
 </head>
 <body>
   <div class="app">
@@ -26,36 +26,48 @@
       </button>
     </header>
 
+    <!-- Landing page -->
+    <section class="hero" id="hero">
+      <div class="hero-glow" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="hero-badge">✨ Your AI video studio</div>
+      <h1 class="hero-title">Welcome to<br><span class="hero-emoji">🍭</span><span class="hero-brand"><i>Lolli</i>POP</span> Social</h1>
+      <p class="hero-sub">Send out social videos in <b>less than 60&nbsp;seconds</b>.</p>
+
+      <div class="demo-phone" aria-hidden="true">
+        <div class="demo-head">YOUR<br><em>NEXT</em><br>POST</div>
+        <svg class="demo-person" viewBox="0 0 100 100" preserveAspectRatio="none"><ellipse cx="50" cy="27" rx="21" ry="22"/><rect x="42" y="44" width="16" height="12" rx="4"/><path d="M0 100c2-30 20-46 50-46s48 16 50 46z"/></svg>
+        <div class="demo-cap"><span>READY</span> <span>IN</span> <span>60</span> <span>SEC</span></div>
+        <div class="demo-logo"><i>Lolli</i>POP</div>
+      </div>
+
+      <div class="hero-steps">
+        <div><span>🎥</span>Record</div><i>›</i>
+        <div><span>✨</span>AI Edit</div><i>›</i>
+        <div><span>📲</span>Post</div>
+      </div>
+
+      <label class="btn btn-cta">
+        <input type="file" accept="video/*" capture="user" id="inRecord" hidden>
+        <svg viewBox="0 0 24 24"><path d="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        Record video
+      </label>
+      <label class="btn btn-ghost hero-lib">
+        <input type="file" accept="video/*" id="inUpload" hidden>
+        Choose from library
+      </label>
+      <button class="link" id="btnContinue" hidden>Continue my last video ›</button>
+
+      <div class="marquee" aria-hidden="true"><div>
+        <span>Animated captions</span><span>Headline behind you</span><span>Auto zoom</span><span>B-roll</span><span>Clean audio</span><span>Remove pauses</span><span>Music</span><span>Your logo</span>
+        <span>Animated captions</span><span>Headline behind you</span><span>Auto zoom</span><span>B-roll</span><span>Clean audio</span><span>Remove pauses</span><span>Music</span><span>Your logo</span>
+      </div></div>
+    </section>
+
     <!-- Preview -->
-    <section class="stage-wrap">
+    <section class="stage-wrap" id="stageWrap" hidden>
       <div class="stage" id="stage">
         <canvas id="canvas" width="720" height="1280"></canvas>
 
-        <div class="empty" id="empty">
-          <div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></div>
-          <h2>Record or upload</h2>
-          <p>Film yourself talking, then let Auto Edit add captions, zooms, B-roll and clean audio.</p>
-          <label class="btn btn-primary">
-            <input type="file" accept="video/*" capture="user" id="inRecord" hidden>
-            Record video
-          </label>
-          <label class="btn btn-ghost">
-            <input type="file" accept="video/*" id="inUpload" hidden>
-            Choose from library
-          </label>
-          <button class="link" id="btnContinue" hidden>Continue my last video ›</button>
-        </div>
-
-
-
-
-        <div class="busy" id="busy" hidden>
-          <div class="spinner"></div>
-          <div class="busy-pct" id="busyPct">0%</div>
-          <div class="busy-msg" id="busyMsg">Working…</div>
-          <div class="bar"><div class="bar-fill" id="busyBar"></div></div>
-          <div class="busy-note">Keep this screen open — longer videos can take a few minutes.</div>
-        </div>
       </div>
 
       <div class="scrub" id="scrub" hidden>
@@ -155,8 +167,15 @@
     <span class="hint-text"><b>Tap to resize the video</b>Smaller while you edit, bigger to watch your edits in action</span>
   </div>
 
+  <div class="busy" id="busy" hidden>
+          <div class="spinner"></div>
+          <div class="busy-pct" id="busyPct">0%</div>
+          <div class="busy-msg" id="busyMsg">Working…</div>
+          <div class="bar"><div class="bar-fill" id="busyBar"></div></div>
+          <div class="busy-note">Keep this screen open — longer videos can take a few minutes.</div>
+        </div>
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=21"></script>
+  <script type="module" src="/static/js/app.js?v=22"></script>
 </body>
 </html>
