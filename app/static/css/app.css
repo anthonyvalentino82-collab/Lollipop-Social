@@ -354,3 +354,23 @@ body.result-open { overflow: hidden; }
 }
 .rock:active { background: var(--red); }
 .vol-pct { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gold); }
+
+/* START HERE: big, glowing, colorful so it's obvious where to begin */
+.btn-auto:not(.done):not(:disabled) {
+  position: relative; padding: 20px 18px;
+  background: linear-gradient(115deg, #e3202a, #ff5a3c, #f2c230, #ff3d8b, #e3202a);
+  background-size: 300% 100%;
+  animation: autoShift 4s linear infinite, autoGlow 1.8s ease-in-out infinite;
+  box-shadow: 0 0 22px rgba(255, 90, 60, .7), 0 0 50px rgba(242, 194, 48, .35), inset 0 1px 0 rgba(255,255,255,.35);
+}
+.btn-auto:not(.done):not(:disabled) svg { width: 30px; height: 30px; filter: drop-shadow(0 0 6px #fff); }
+.auto-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; }
+.auto-big { font-size: 30px; font-weight: 900; letter-spacing: 1.5px; text-shadow: 0 2px 3px rgba(120,0,20,.55), 0 0 10px rgba(255,255,255,.8), 0 0 22px rgba(255,220,120,.7); }
+.auto-small { text-shadow: 0 1px 2px rgba(120,0,20,.6); }
+.auto-small { font-size: 14px; font-weight: 700; opacity: .95; margin-top: 3px; letter-spacing: .3px; }
+.btn-auto.done .auto-big { font-size: 20px; letter-spacing: .3px; text-shadow: none; }
+.btn-auto.done .auto-small { font-size: 12px; opacity: .7; }
+@keyframes autoShift { to { background-position: 300% 0; } }
+@keyframes autoGlow {
+  50% { box-shadow: 0 0 34px rgba(255, 90, 60, .95), 0 0 80px rgba(242, 194, 48, .55), inset 0 1px 0 rgba(255,255,255,.35); transform: scale(1.015); }
+}

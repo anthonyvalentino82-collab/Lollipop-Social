@@ -279,7 +279,8 @@ async function openProject(p) {
   document.querySelectorAll(".tools button").forEach((b) => (b.disabled = false));
   $("btnAuto").disabled = false;
   $("btnAuto").classList.toggle("done", !!p.autoEdited);
-  $("btnAutoLabel").textContent = p.autoEdited ? "AI Edit — walk through again" : "AI Edit";
+  $("btnAutoLabel").textContent = p.autoEdited ? "AI Edit" : "START HERE";
+  $("btnAutoSub").textContent = p.autoEdited ? "Walk through your edits again" : "Tap for ✨ AI Edit";
   $("btnSave").hidden = !p.autoEdited;
   $("btnFine").hidden = !p.autoEdited;
   renderBroll();
@@ -319,7 +320,8 @@ function resetToEmpty() {
   $("btnAuto").disabled = true;
   $("btnAuto").classList.remove("done");
   $("btnSave").classList.remove("ready");
-  $("btnAutoLabel").textContent = "AI Edit";
+  $("btnAutoLabel").textContent = "START HERE";
+  $("btnAutoSub").textContent = "Tap for ✨ AI Edit";
   const c = $("canvas"); c.getContext("2d").clearRect(0, 0, c.width, c.height);
   preview.setProject(null);
   preview.setMusic(null);
