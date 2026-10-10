@@ -941,7 +941,23 @@ function logoSheet() {
   ];
 }
 
-// Big − / + buttons and a slider; the level stays exactly where you put it.
+// A button that steps once per tap and keeps stepping while held down.
+function holdButton(label, aria, step) {
+  const b = el("button", { class: "rock", "aria-label": aria }, label);
+  let wait = null, rep = null;
+  const stop = () => { clearTimeout(wait); clearInterval(rep); wait = rep = null; };
+  b.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    stop();
+    step();
+    wait = setTimeout(() => { rep = setInterval(step, 70); }, 400);
+  });
+  ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => b.addEventListener(ev, stop));
+  b.addEventListener("contextmenu", (e) => e.preventDefault()); // no iPhone long-press menu
+  return b;
+}
+
+// Big − / + buttons (1% per tap, hold to keep going) and a slider; the level stays where you put it.
 function volumeRocker(m, changed) {
   const pctOf = (v) => Math.round((v ?? 0.2) * 100);
   const out = el("span", { class: "vol-pct" }, `${pctOf(m.volume)}%`);
@@ -957,9 +973,9 @@ function volumeRocker(m, changed) {
   return el("div", { class: "field" },
     el("div", { class: "row" }, el("label", { class: "label" }, "Music volume"), out),
     el("div", { class: "rocker" },
-      el("button", { class: "rock", "aria-label": "Quieter", onclick: () => set((m.volume ?? 0.2) - 0.05) }, "−"),
+      holdButton("−", "Quieter", () => set((m.volume ?? 0.2) - 0.01)),
       inp,
-      el("button", { class: "rock", "aria-label": "Louder", onclick: () => set((m.volume ?? 0.2) + 0.05) }, "+")));
+      holdButton("+", "Louder", () => set((m.volume ?? 0.2) + 0.01))));
 }
 
 // ----- MUSIC -----
