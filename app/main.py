@@ -241,7 +241,8 @@ def project_file(pid: str, path: str):
         raise HTTPException(404)
     headers = {"Cache-Control": "no-cache"}
     if f.name == "export.mp4":
-        headers["Content-Disposition"] = 'attachment; filename="lollipop-video.mp4"'
+        # inline so "Open video" plays it in Safari (Share → Save Video from there)
+        headers["Content-Disposition"] = 'inline; filename="lollipop-video.mp4"'
     return FileResponse(f, headers=headers)
 
 

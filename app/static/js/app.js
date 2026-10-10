@@ -68,13 +68,37 @@ function upload(url, fields, onProgress) {
 }
 
 async function waitJob(job, onProgress) {
+  let misses = 0;
   while (true) {
-    const j = await api(`/api/jobs/${job.id}`);
+    let j;
+    try {
+      const r = await fetch(`/api/jobs/${job.id}`);
+      if (r.status === 401) { showLogin(); throw new AuthError("login"); }
+      if (r.status === 404) {
+        throw new Error("The server restarted while working (this happens when the app updates). Please tap the button again.");
+      }
+      if (!r.ok) throw Object.assign(new Error(`Server error (${r.status})`), { transient: true });
+      j = await r.json();
+      misses = 0;
+    } catch (e) {
+      // Phone went to sleep, Wi-Fi blip, server busy: keep trying for ~3 minutes.
+      if (e instanceof AuthError || !(e.transient || e instanceof TypeError) || ++misses > 90) throw e;
+      await new Promise((res) => setTimeout(res, 2000));
+      continue;
+    }
     onProgress && onProgress(j);
     if (j.status === "done") return j;
     if (j.status === "error") throw new Error(j.error || "Something went wrong.");
     await new Promise((r) => setTimeout(r, 900));
   }
+}
+
+function showError(title, err, retry) {
+  openSheet("error", title, [
+    el("p", { class: "note warn" }, String(err && err.message || err)),
+    el("p", { class: "note" }, "If this keeps happening, take a screenshot of this message and send it to Claude."),
+    retry ? el("button", { class: "btn btn-primary", onclick: () => { closeSheet(); retry(); } }, "Try again") : null,
+  ]);
 }
 
 function busy(msg, p) {
@@ -153,7 +177,7 @@ async function fetchWithProgress(url, onProgress) {
     if (done) break;
     chunks.push(value);
     got += value.length;
-    onProgress(got / total);
+    onProgress(got / total, got, total);
   }
   return new Blob(chunks, { type: r.headers.get("Content-Type") || "video/mp4" });
 }
@@ -314,46 +338,56 @@ $("btnFine").addEventListener("click", () => {
 });
 
 // ---------- save / export ----------
-$("btnSave").addEventListener("click", async () => {
+async function saveVideo() {
   const p = state.project;
   if (!p) return;
   preview.pause();
   closeSheet();
   await flush();
+  let url;
   try {
     // One bar for the whole save: building on the server = 0-90%, download to the phone = 90-100%.
     busy("Saving your video", 0);
     const job = await api(`/api/projects/${p.id}/render`, { method: "POST" });
     const done = await waitJob(job, (j) => busy(j.status === "queued" ? "Waiting for the server…" : j.message, j.progress * 0.9));
-    busy("Saving to your phone", 0.9);
-    const blob = await fetchWithProgress(done.result.url, (f) => busy("Saving to your phone", 0.9 + 0.1 * f));
-    busy(null);
-    showExport(blob, done.result.url);
+    url = done.result.url;
   } catch (e) {
     busy(null);
-    if (!(e instanceof AuthError)) toast(e.message, 6000);
+    if (!(e instanceof AuthError)) showError("Saving didn't finish", e, saveVideo);
+    return;
   }
-});
+  let blob = null;
+  try {
+    busy("Saving to your phone", 0.9);
+    blob = await fetchWithProgress(url, (f, got, total) =>
+      busy(`Saving to your phone (${Math.round(got / 1e6)} of ${Math.round(total / 1e6)} MB)`, 0.9 + 0.1 * f));
+  } catch (e) {
+    console.warn("download failed", e); // still offer the direct link below
+  }
+  busy(null);
+  showExport(blob, url);
+}
+$("btnSave").addEventListener("click", saveVideo);
 
 function showExport(blob, url) {
   if (state.exportUrl) URL.revokeObjectURL(state.exportUrl);
-  state.exportUrl = URL.createObjectURL(blob);
-  const file = new File([blob], "lollipop-video.mp4", { type: "video/mp4" });
-  const canShare = navigator.canShare && navigator.canShare({ files: [file] });
+  state.exportUrl = blob ? URL.createObjectURL(blob) : null;
+  const file = blob ? new File([blob], "lollipop-video.mp4", { type: "video/mp4" }) : null;
+  const canShare = !!(file && navigator.canShare && navigator.canShare({ files: [file] }));
   openSheet("export", "Your video is ready", [
-    el("video", { class: "export-video", src: state.exportUrl, controls: true, playsinline: true }),
+    el("video", { class: "export-video", src: state.exportUrl || url, controls: true, playsinline: true }),
     canShare
       ? el("button", {
           class: "btn btn-primary", onclick: async () => {
             try { await navigator.share({ files: [file] }); }
-            catch (e) { if (e.name !== "AbortError") toast("Sharing failed — use Download instead."); }
+            catch (e) { if (e.name !== "AbortError") toast("Sharing didn't open — use “Open video” below instead.", 5000); }
           },
         }, "Save to iPhone / Share")
       : null,
     el("p", { class: "note" }, canShare
       ? "Tap “Save to iPhone / Share”, then choose “Save Video” to put it in Photos — or send it straight to Messages, Instagram, TikTok, Facebook, LinkedIn or YouTube."
-      : "Download the MP4, then share it to Photos or any app."),
-    el("a", { class: "small-btn wide", href: url, download: "lollipop-video.mp4" }, "Download MP4"),
+      : "Tap “Open video”, then the Share button (square with arrow) → “Save Video”, or download it."),
+    el("a", { class: "small-btn wide", href: url, target: "_blank", rel: "noopener" }, "Open video"),
   ]);
 }
 
