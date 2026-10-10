@@ -342,3 +342,15 @@ body.result-open { overflow: hidden; }
 .cut-btn { color: #ff9a9a; }
 .cut-row { font-size: 14px; font-variant-numeric: tabular-nums; }
 .chip.add-font { color: var(--gold); border-style: dashed; }
+
+.sheet-head { gap: 12px; }
+.sheet-titles { flex: 1; min-width: 0; }
+.pp-mini { width: 42px; height: 42px; flex: 0 0 auto; }
+.rocker { display: flex; align-items: center; gap: 10px; }
+.rocker input { flex: 1; }
+.rock {
+  width: 48px; height: 48px; flex: 0 0 auto; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--panel-2); font-size: 26px; font-weight: 700; line-height: 1; cursor: pointer;
+}
+.rock:active { background: var(--red); }
+.vol-pct { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gold); }

@@ -109,7 +109,7 @@ export class Preview {
       if (dur) this.audio.currentTime = t % dur;
       this.audio.play().catch(() => {});
     }
-    const speaking = m.duck !== false && this.p.captions && captionAt(this.p.captions.lines || [], this.video.currentTime);
+    const speaking = m.autoDuck === true && this.p.captions && captionAt(this.p.captions.lines || [], this.video.currentTime);
     const target = (m.volume ?? 0.25) * (speaking ? 0.3 : 1);
     this.gain.gain.setTargetAtTime(target, this.actx.currentTime, 0.12);
   }

@@ -112,7 +112,7 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
     final_audio = pdir / "final_audio.m4a"
     audio_mod.mix_final(voice, final_audio, segments,
                         music=music_path if music.get("enabled", True) else None,
-                        music_volume=float(music.get("volume", 0.25)), duck=music.get("duck", True))
+                        music_volume=float(music.get("volume", 0.25)), duck=bool(music.get("autoDuck", False)))
 
     # ---- static layers ----
     head = project.get("headline", {})

@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon.png">
   <link rel="icon" href="/static/brand/favicon.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=9">
+  <link rel="stylesheet" href="/static/css/app.css?v=10">
 </head>
 <body>
   <div class="app">
@@ -110,7 +110,11 @@
   <div class="sheet" id="sheet" hidden>
     <div class="sheet-grab"></div>
     <div class="sheet-head">
-      <div>
+      <button class="pp-btn pp-mini" id="ppMini" aria-label="Play">
+        <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        <svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+      </button>
+      <div class="sheet-titles">
         <div class="sheet-step" id="sheetStep" hidden></div>
         <h3 id="sheetTitle"></h3>
       </div>
@@ -143,6 +147,6 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=9"></script>
+  <script type="module" src="/static/js/app.js?v=10"></script>
 </body>
 </html>

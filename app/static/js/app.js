@@ -159,7 +159,11 @@ const preview = new Preview($("canvas"), video, {
 });
 video.addEventListener("play", () => { $("playBtn").hidden = true; $("ppBtn").classList.add("playing"); });
 video.addEventListener("pause", () => { $("playBtn").hidden = !state.project; $("ppBtn").classList.remove("playing"); });
-$("ppBtn").addEventListener("click", () => { if (video.paused) preview.play(); else preview.pause(); });
+const togglePlay = () => { if (video.paused) preview.play(); else preview.pause(); };
+$("ppBtn").addEventListener("click", togglePlay);
+$("ppMini").addEventListener("click", togglePlay);
+video.addEventListener("play", () => $("ppMini").classList.add("playing"));
+video.addEventListener("pause", () => $("ppMini").classList.remove("playing"));
 
 function updateScrub(t) {
   const p = state.project;
@@ -863,6 +867,27 @@ function logoSheet() {
   ];
 }
 
+// Big − / + buttons and a slider; the level stays exactly where you put it.
+function volumeRocker(m, changed) {
+  const pctOf = (v) => Math.round((v ?? 0.2) * 100);
+  const out = el("span", { class: "vol-pct" }, `${pctOf(m.volume)}%`);
+  const inp = el("input", { type: "range", min: 0, max: 100, step: 1, value: pctOf(m.volume) });
+  const paint = () => {
+    inp.value = pctOf(m.volume);
+    inp.style.setProperty("--p", `${inp.value}%`);
+    out.textContent = `${inp.value}%`;
+  };
+  const set = (v) => { m.volume = Math.round(Math.min(1, Math.max(0, v)) * 100) / 100; paint(); changed(); preview.syncMusic(); };
+  inp.addEventListener("input", () => set(+inp.value / 100));
+  paint();
+  return el("div", { class: "field" },
+    el("div", { class: "row" }, el("label", { class: "label" }, "Music volume"), out),
+    el("div", { class: "rocker" },
+      el("button", { class: "rock", "aria-label": "Quieter", onclick: () => set((m.volume ?? 0.2) - 0.05) }, "−"),
+      inp,
+      el("button", { class: "rock", "aria-label": "Louder", onclick: () => set((m.volume ?? 0.2) + 0.05) }, "+")));
+}
+
 // ----- MUSIC -----
 function musicSheet() {
   const p = state.project, m = p.music;
@@ -887,8 +912,9 @@ function musicSheet() {
       el("label", { class: "small-btn" }, inp, m.file ? "Change" : "Choose music")),
     el("p", { class: "note" }, "Pick an MP3/M4A saved in your Files app. (Songs from Apple Music are copy-protected and can't be used.)"),
     m.file ? toggle("Use music", m.enabled !== false, (v) => { m.enabled = v; changed(); }) : null,
-    m.file ? slider("Music volume", { min: 0, max: 1, step: 0.01, value: m.volume ?? 0.25, fmt: (v) => `${Math.round(v * 100)}%`, oninput: (v) => { m.volume = v; changed(); } }) : null,
-    m.file ? toggle("Lower music while I talk", m.duck !== false, (v) => { m.duck = v; changed(); }) : null,
+    m.file ? volumeRocker(m, changed) : null,
+    m.file ? toggle("Auto-lower music while I talk", m.autoDuck === true, (v) => { m.autoDuck = v; changed(); }) : null,
+    m.file ? el("p", { class: "note" }, "Off = the music stays at exactly the level you set. Press ▶ to hear it while you adjust.") : null,
     el("hr", { style: "border:0;border-top:1px solid rgba(255,255,255,.08);width:100%" }),
     toggle("Clean up my voice", p.audio?.clean !== false, (v) => { p.audio = { ...(p.audio || {}), clean: v }; save(["audio"]); }),
     el("p", { class: "note" }, "Removes background noise, makes speech clearer and evens out loudness. Applied when you save."),

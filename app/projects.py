@@ -168,7 +168,7 @@ def create(upload_name: str) -> tuple[dict, Path]:
         "zoom": {"enabled": True, "intensity": s["zoomDefaults"]["intensity"], "segments": []},
         "faceTrack": [],
         "broll": [],
-        "music": {"enabled": False, "file": None, "name": None, "volume": 0.25, "duck": True},
+        "music": {"enabled": False, "file": None, "name": None, "volume": 0.2, "autoDuck": False},
         "cuts": [], "pauseCuts": [], "removePauses": True,
         "audio": {"clean": True},
         "autoEdited": False, "warnings": [],
