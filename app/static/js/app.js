@@ -231,14 +231,25 @@ function setSize(sz) {
   document.querySelectorAll(".size-label").forEach((e) => (e.textContent = SIZE_NAMES[sz]));
   $("exitFull").hidden = sz !== "full";
   if (sz === "full") window.scrollTo({ top: 0 });
+  const k = SIZES.indexOf(sz);
+  for (const id of ["sizeSmaller", "sizeSmaller2"]) $(id).disabled = k <= 0;
+  for (const id of ["sizeBigger", "sizeBigger2"]) $(id).disabled = k >= SIZES.length - 1;
   preview.draw();
   placeSizeHint();
   setTimeout(placeSizeHint, 260); // after the resize animation
 }
+// "Make video bigger / smaller" buttons beside the video.
+function stepSize(d) {
+  const k = Math.max(0, Math.min(SIZES.length - 1, SIZES.indexOf(state.size || "m") + d));
+  setSize(SIZES[k]);
+}
+for (const id of ["sizeBigger", "sizeBigger2"]) $(id).addEventListener("click", (e) => { e.stopPropagation(); stepSize(1); });
+for (const id of ["sizeSmaller", "sizeSmaller2"]) $(id).addEventListener("click", (e) => { e.stopPropagation(); stepSize(-1); });
 
 // The note + moving arrow beside the size button (shown while editing, when there's room).
 function placeSizeHint() {
   const hint = $("sizeHint");
+  hint.hidden = true; return; // replaced by the Bigger / Smaller buttons beside the video
   const editing = document.body.classList.contains("sheet-open") && state.size !== "full" && state.project;
   if (!editing || recall("lp_size_hint_done")) { hint.hidden = true; return; } // once they've used it, they know
   hint.hidden = false;
@@ -1487,9 +1498,10 @@ function headlineSheet() {
     toggle("Show headline", !!h.enabled, (v) => { h.enabled = v; changed(); }),
     el("div", { class: "field" }, el("label", { class: "label" }, "Headline text"), ta,
       el("p", { class: "note" }, "This stays on screen the whole video. Put *stars* around words to color them. Press return for a new line.")),
-    toggle("Square block (every line full width)", h.block !== false, (v) => { h.block = v; changed(); }),
-    toggle("Place behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); refreshSheet(); }),
-    h.behind !== false ? toggle("Extra-sharp cut-out (slower save)", h.cutout === "best", (v) => { h.cutout = v ? "best" : "sharp"; changed(); }) : null,
+    el("div", { class: "toggles" },
+      toggle("Square block", h.block !== false, (v) => { h.block = v; changed(); }),
+      toggle("Behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); refreshSheet(); }),
+      h.behind !== false ? toggle("Extra-sharp (slower save)", h.cutout === "best", (v) => { h.cutout = v ? "best" : "sharp"; changed(); }) : null),
     el("p", { class: "note" }, "Drag the headline on the preview to move it. Pinch to resize."),
     fontPicker("Font", FONTS_HEADLINE, h.font, (v) => { h.font = v; changed(); }),
     slider("Size", { min: 50, max: 320, value: h.size || 150, oninput: (v) => { h.size = v; changed(); } }),
@@ -1722,7 +1734,7 @@ function headlineStep() {
   ta.addEventListener("input", () => { h.text = ta.value; h.enabled = !!h.text.trim(); changed(); });
   const sample = (h.text || "").replace(/\*/g, "").split(/\s+/).filter(Boolean).slice(0, 3).join(" ") || "Big news today";
   return [
-    el("p", { class: "note" }, "Type a short headline that sits behind you (optional — leave it empty to skip). Put *stars* around words to color them."),
+    el("p", { class: "note" }, "Optional headline behind you. Put *stars* around words to color them."),
     ta,
     el("div", { class: "presets" }, ...HEADLINE_PRESETS.map((pr) => presetCard({
       label: pr.name, sample, font: pr.font, color: pr.color, accent: pr.accent, upper: true,
@@ -1733,9 +1745,10 @@ function headlineStep() {
     swatches("Headline color", null, h.color, (v) => { h.color = v; changed(); }),
     swatches("*Starred* word color", null, h.accent, (v) => { h.accent = v; changed(); }),
     fontPicker("Or choose a font", FONTS_HEADLINE, h.font, (v) => { h.font = v; changed(); }),
-    toggle("Square block (every line full width)", h.block !== false, (v) => { h.block = v; changed(); }),
-    toggle("Place behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); refreshSheet(); }),
-    h.behind !== false ? toggle("Extra-sharp cut-out (slower save)", h.cutout === "best", (v) => { h.cutout = v ? "best" : "sharp"; changed(); }) : null,
+    el("div", { class: "toggles" },
+      toggle("Square block", h.block !== false, (v) => { h.block = v; changed(); }),
+      toggle("Behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); refreshSheet(); }),
+      h.behind !== false ? toggle("Extra-sharp (slower save)", h.cutout === "best", (v) => { h.cutout = v ? "best" : "sharp"; changed(); }) : null),
     el("p", { class: "note" }, "Tip: drag the headline on the preview to move it, pinch to resize."),
   ];
 }

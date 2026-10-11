@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon-v2.png">
   <link rel="icon" href="/static/brand/favicon-v2.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=56">
+  <link rel="stylesheet" href="/static/css/app.css?v=63">
 </head>
 <body>
   <div class="app">
@@ -94,9 +94,15 @@
 
     <!-- Preview -->
     <section class="stage-wrap" id="stageWrap" hidden>
-      <div class="stage" id="stage">
-        <canvas id="canvas" width="720" height="1280"></canvas>
-
+      <div class="stage-row">
+        <div class="size-note" id="sizeNote">✂️ <b>Editing?</b> Make the video smaller so all your options fit.<br><br>👀 <b>Checking the look?</b> Make it bigger.</div>
+        <div class="stage" id="stage">
+          <canvas id="canvas" width="720" height="1280"></canvas>
+        </div>
+        <div class="size-side">
+          <button class="size-step" id="sizeBigger"><span>＋</span>Make video bigger</button>
+          <button class="size-step" id="sizeSmaller"><span>－</span>Make video smaller</button>
+        </div>
       </div>
 
       <div class="scrub" id="scrub" hidden>
@@ -108,6 +114,8 @@
         <input type="range" id="seek" min="0" max="1000" value="0">
         <span id="tDur">0:00</span>
         <button class="size-btn" id="sizeBtnMain" aria-label="Change video size"><svg viewBox="0 0 24 24"><path d="M7 10l5-5 5 5M7 14l5 5 5-5"/></svg><span class="size-label">Medium</span></button>
+        <button class="size-mini" id="sizeSmaller2" aria-label="Make video smaller">－</button>
+        <button class="size-mini" id="sizeBigger2" aria-label="Make video bigger">＋</button>
       </div>
       <div class="hint" id="hint" hidden>Drag the headline, captions or logo to move them. Pinch to resize.</div>
     </section>
@@ -272,6 +280,6 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=44"></script>
+  <script type="module" src="/static/js/app.js?v=46"></script>
 </body>
 </html>
