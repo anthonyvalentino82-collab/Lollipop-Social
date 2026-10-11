@@ -329,6 +329,20 @@ def debug_report(rid: str, request: Request):
     return FileResponse(f, media_type="application/json")
 
 
+@app.get("/api/debug/projects")
+def debug_projects(request: Request):
+    _debug_auth(request)
+    return debug.list_projects()
+
+
+@app.get("/api/debug/projects/{pid}")
+def debug_project(pid: str, request: Request):
+    _debug_auth(request)
+    if not re.fullmatch(r"[0-9a-f]{12}", pid) or not (config.PROJECTS_DIR / pid).is_dir():
+        raise HTTPException(404, "Project not found")
+    return debug.project_facts(pid)
+
+
 @app.get("/api/debug/server")
 def debug_server(request: Request):
     _debug_auth(request)

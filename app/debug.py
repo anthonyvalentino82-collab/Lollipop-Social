@@ -36,6 +36,54 @@ def media_facts(path: Path) -> dict | str:
         return f"ffprobe failed: {exc}"
 
 
+def timing_facts(path: Path) -> dict | str:
+    """Frame timing of the video track (timestamps only, no content): how many frames, where they
+    start and end, and the biggest gaps — shows whether the picture really stops in the file."""
+    try:
+        out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                              "packet=pts_time,dts_time", "-of", "csv=p=0", str(path)],
+                             capture_output=True, text=True, timeout=60)
+        ts, dts = [], []
+        for line in out.stdout.splitlines():
+            parts = (line.split(",") + ["", ""])[:2]
+            try:
+                ts.append(float(parts[0] or parts[1]))
+            except ValueError:
+                continue
+            try:
+                dts.append(float(parts[1]))
+            except ValueError:
+                pass
+        if not ts:
+            return {"frames": 0}
+        backwards = sum(1 for x, y in zip(dts, dts[1:]) if y < x)  # decode order should never go back
+        srt = sorted(ts)
+        gaps = sorted(((b - a, a) for a, b in zip(srt, srt[1:])), reverse=True)[:5]
+        aud = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+                              "stream=duration,start_time", "-of", "csv=p=0", str(path)],
+                             capture_output=True, text=True, timeout=30).stdout.strip()
+        return {"frames": len(ts), "first": round(srt[0], 3), "last": round(srt[-1], 3),
+                "fps_measured": round(len(ts) / max(0.001, srt[-1] - srt[0]), 2),
+                "out_of_order": backwards, "biggest_gaps": [[round(g, 3), round(t, 3)] for g, t in gaps],
+                "audio_duration_start": aud}
+    except Exception as exc:  # noqa: BLE001
+        return f"timing failed: {exc}"
+
+
+def freeze_facts(path: Path) -> list | str:
+    """Stretches where the picture doesn't change for 1+ second."""
+    import re
+    try:
+        out = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(path), "-an", "-vf",
+                              "scale=160:-2,freezedetect=n=0.003:d=1", "-f", "null", "-"],
+                             capture_output=True, text=True, timeout=300).stderr
+        starts = [float(x) for x in re.findall(r"freeze_start: ([\d.]+)", out)]
+        ends = [float(x) for x in re.findall(r"freeze_end: ([\d.]+)", out)]
+        return [[round(a, 2), round(ends[i], 2) if i < len(ends) else "end"] for i, a in enumerate(starts)]
+    except Exception as exc:  # noqa: BLE001
+        return f"freeze check failed: {exc}"
+
+
 def project_facts(pid: str) -> dict:
     d = config.PROJECTS_DIR / pid
     facts: dict = {"files": {f.name: f.stat().st_size for f in sorted(d.iterdir()) if f.is_file()}}
@@ -51,11 +99,14 @@ def project_facts(pid: str) -> dict:
             "audio": p.get("audio"), "warnings": p.get("warnings"), "sourceWarnings": p.get("sourceWarnings"),
         }
         facts["original"] = p.get("originalFacts")
+        facts["originalTiming"] = p.get("originalTiming")
     except Exception:  # noqa: BLE001
         pass
     for name in ("source.mp4", "export.mp4"):
         if (d / name).exists():
             facts.setdefault("media", {})[name] = media_facts(d / name)
+            facts.setdefault("timing", {})[name] = timing_facts(d / name)
+            facts.setdefault("freezes", {})[name] = freeze_facts(d / name)
     return facts
 
 
@@ -84,6 +135,20 @@ def save_report(payload: dict) -> str:
     for old in sorted(config.REPORTS_DIR.glob("*.json"))[:-30]:  # keep the latest 30
         old.unlink(missing_ok=True)
     return rid
+
+
+def list_projects(limit: int = 10) -> list[dict]:
+    dirs = sorted((d for d in config.PROJECTS_DIR.iterdir() if d.is_dir()), key=lambda d: d.stat().st_mtime, reverse=True)
+    out = []
+    for d in dirs[:limit]:
+        try:
+            p = json.loads((d / "project.json").read_text())
+        except Exception:  # noqa: BLE001
+            continue
+        out.append({"id": d.name, "created": p.get("created"), "status": p.get("status"),
+                    "source": p.get("source"), "autoEdited": p.get("autoEdited"),
+                    "files": sorted(f.name for f in d.iterdir() if f.is_file())})
+    return out
 
 
 def list_reports() -> list[dict]:

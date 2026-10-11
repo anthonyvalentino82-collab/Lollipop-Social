@@ -201,6 +201,8 @@ def prepare(pid: str, progress) -> dict:
                                "Trim it there, or re-record — the iPhone Camera app + “Choose from library” is the most reliable.")
     from .debug import media_facts
     original_facts = media_facts(original)  # codec/fps/duration only, for "Report a problem"
+    from .debug import timing_facts
+    original_timing = timing_facts(original)
     original.unlink(missing_ok=True)  # save disk space; the working copy is all we need
     with _lock:
         p = load(pid)
@@ -209,6 +211,7 @@ def prepare(pid: str, progress) -> dict:
         p["status"] = "ready"
         p["sourceWarnings"] = source_warnings
         p["originalFacts"] = original_facts
+        p["originalTiming"] = original_timing
         save(p)
     return {"ok": True}
 
