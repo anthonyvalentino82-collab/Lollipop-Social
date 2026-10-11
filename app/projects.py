@@ -165,7 +165,8 @@ def create(upload_name: str) -> tuple[dict, Path]:
         "words": [],
         "captions": {"enabled": True, "style": dict(s["captionDefaults"]), "lines": []},
         "headline": {"enabled": False, "text": "", **s["headlineDefaults"]},
-        "logo": {"enabled": True, "id": s["defaultLogo"], **s["logoDefaults"]},
+        # Every video starts with no logo; you pick one (from your saved logos) in the Logo step.
+        "logo": {"enabled": False, "id": s["defaultLogo"], **s["logoDefaults"]},
         "zoom": {"enabled": True, "intensity": s["zoomDefaults"]["intensity"], "segments": []},
         "faceTrack": [],
         "broll": [],

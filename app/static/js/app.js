@@ -1585,8 +1585,10 @@ function logoSheet() {
   const p = state.project, l = p.logo;
   const changed = () => save(["logo"]);
   const grid = el("div", { class: "logos" });
+  // "No logo" first: every video starts without one.
+  grid.append(el("div", { class: `logo-opt logo-none${l.enabled ? "" : " on"}`, onclick: () => { l.enabled = false; changed(); refreshSheet(); } }, "No logo"));
   for (const opt of state.settings.logos) {
-    grid.append(el("div", { class: `logo-opt${opt.id === l.id ? " on" : ""}`, onclick: () => { l.id = opt.id; l.enabled = true; preview.setLogo(opt.url); changed(); refreshSheet(); } },
+    grid.append(el("div", { class: `logo-opt${l.enabled && opt.id === l.id ? " on" : ""}`, onclick: () => { l.id = opt.id; l.enabled = true; preview.setLogo(opt.url); changed(); refreshSheet(); } },
       el("img", { src: opt.url, alt: opt.name }),
       opt.builtin ? null : el("button", { class: "x", onclick: async (e) => {
         e.stopPropagation();
@@ -1611,7 +1613,7 @@ function logoSheet() {
   grid.append(el("label", { class: "logo-opt logo-add" }, inp, "+ Add logo"));
   const pos = { tl: [0.2, 0.07], top: [0.5, 0.07], tr: [0.8, 0.07], bl: [0.2, 0.93], bottom: [0.5, 0.93], br: [0.8, 0.93] };
   return [
-    toggle("Show my logo", !!l.enabled, (v) => { l.enabled = v; changed(); }),
+    el("p", { class: "note" }, "Tap one of your logos, or “+ Add logo” to save a new one from your phone for this and future videos."),
     grid,
     chips("Where?", [["tl", "↖"], ["top", "Top"], ["tr", "↗"], ["bl", "↙"], ["bottom", "Bottom"], ["br", "↘"]], null, (v) => { [l.x, l.y] = pos[v]; changed(); }),
     more(recall("lp_more_logo"),

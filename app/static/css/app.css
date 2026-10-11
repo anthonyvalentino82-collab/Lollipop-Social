@@ -951,3 +951,6 @@ body.sheet-open[data-size="l"] .stage { width: min(calc(100vw - 210px), calc((10
   animation: teeter 3.2s ease-in-out infinite; animation-delay: var(--d, 0s); transform-origin: 50% 85%; }
 @keyframes teeter { 0%, 100% { transform: rotate(-8deg) translateY(0); } 50% { transform: rotate(8deg) translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .ring .ex img { animation: none; } }
+
+.logo-opt.logo-none { display: grid; place-items: center; font-weight: 800; font-size: 13px; color: var(--muted); }
+.logo-opt.logo-none.on { color: #fff; }
