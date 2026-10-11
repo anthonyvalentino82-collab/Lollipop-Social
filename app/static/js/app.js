@@ -821,13 +821,23 @@ async function checkTakePicture(v) {
     if (!v.requestVideoFrameCallback) return null;
     if (!(v.readyState >= 1)) await new Promise((r) => v.addEventListener("loadedmetadata", r, { once: true }));
     if (!isFinite(v.duration) || v.duration < 4) return null;
+    const target = Math.max(0, v.duration - 0.3);
+    const seek = (t) => new Promise((res) => {
+      const to = setTimeout(res, 3000);
+      v.addEventListener("seeked", () => { clearTimeout(to); res(); }, { once: true });
+      v.currentTime = t;
+    });
+    await seek(target);
+    // Only now listen for a frame, then nudge the position so a fresh frame is shown: this
+    // avoids reading the very first frame (0:00) that may appear while the jump is happening.
     const shown = new Promise((res) => {
       const to = setTimeout(() => res(null), 3000);
       v.requestVideoFrameCallback((now, meta) => { clearTimeout(to); res(meta.mediaTime); });
     });
-    v.currentTime = Math.max(0, v.duration - 0.3);
+    await seek(Math.max(0, target - 0.05));
     const last = await shown;
-    return last != null && last < v.duration - 2 ? last : null;
+    if (last == null || last < 0.2) return null; // no clear answer: don't raise a false alarm
+    return last < v.duration - 2 ? last : null;
   } catch { return null; }
 }
 $("camRetake").addEventListener("click", async () => {
