@@ -513,7 +513,7 @@ async function camStart() {
   dlog("camera opened", { facing: cam.facing, settings: st, mic: micLabel,
     mics: (await navigator.mediaDevices.enumerateDevices().catch(() => [])).filter((d) => d.kind === "audioinput").map((d) => d.label) });
   const short = Math.min(w || 0, h || 0);
-  $("camQuality").textContent = short ? `${short >= 1080 ? "HD 1080p" : short + "p"} · ${Math.round(st.frameRate || 30)} fps` : "";
+  $("camQuality").textContent = short ? `${short >= 1080 ? "HD" : short + "p"} · ${Math.round(st.frameRate || 30)}` : "";
 }
 function camStop() {
   if (cam.rec && cam.rec.state !== "inactive") { cam.rec.onstop = null; cam.rec.stop(); }
@@ -606,7 +606,7 @@ function tpRender() {
   const show = !!text && recall("lp_tp_hidden") !== "1";
   $("tp").hidden = !show;
   $("cam").classList.toggle("has-tp", show);
-  $("tpOpen").textContent = text ? "📜 Script" : "📜 Add script";
+  $("tpOpen").textContent = "📜 Teleprompter";
   $("tpText").textContent = text;
   $("tpText").style.fontSize = `${tp.size}px`;
   $("tpSpeed").textContent = tp.speed;
@@ -633,6 +633,7 @@ function tpSet(k, v) { tp[k] = v; store(k === "speed" ? "lp_tp_speed" : "lp_tp_s
 $("tpOpen").addEventListener("click", () => {
   tpPlay(false);
   $("tpInput").value = tpScript();
+  tpCount();
   $("tpEdit").hidden = false;
   setTimeout(() => $("tpInput").focus(), 50);
 });
@@ -642,7 +643,13 @@ $("tpSave").addEventListener("click", () => {
   $("tpEdit").hidden = true;
   tpRender(); tpRestart();
 });
-$("tpClear").addEventListener("click", () => { $("tpInput").value = ""; $("tpInput").focus(); });
+function tpCount() {
+  const words = ($("tpInput").value.match(/\S+/g) || []).length;
+  const secs = Math.round(words / 2.5); // typical speaking pace ≈ 150 words a minute
+  $("tpCount").textContent = `${words} words · about ${secs < 60 ? secs + " s" : fmt(secs)} to read`;
+}
+$("tpInput").addEventListener("input", tpCount);
+$("tpClear").addEventListener("click", () => { $("tpInput").value = ""; tpCount(); $("tpInput").focus(); });
 $("tpEdit").addEventListener("click", (e) => { if (e.target === $("tpEdit")) $("tpEdit").hidden = true; });
 $("tpPlay").addEventListener("click", () => tpPlay(!tp.playing));
 $("tpRestart").addEventListener("click", tpRestart);

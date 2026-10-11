@@ -678,3 +678,7 @@ body.cam-open { overflow: hidden; }
 .tp-edit-row { display: flex; gap: 10px; }
 .tp-edit-row .btn { flex: 1; }
 .cam.has-tp .cam-mic { top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 130px); }
+.tp-count { margin: -4px 0 12px; color: var(--gold); font-weight: 800; font-size: 14px; }
+.cam-top { gap: 8px; }
+.cam-script { white-space: nowrap; }
+.cam-q { white-space: nowrap; }

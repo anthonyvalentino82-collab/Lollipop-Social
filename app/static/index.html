@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon-v2.png">
   <link rel="icon" href="/static/brand/favicon-v2.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=41">
+  <link rel="stylesheet" href="/static/css/app.css?v=42">
 </head>
 <body>
   <div class="app">
@@ -201,7 +201,7 @@
       <button class="cam-x" id="camClose" aria-label="Close">✕</button>
       <span class="cam-q" id="camQuality"></span>
       <span class="cam-time" id="camTime" hidden>0:00</span>
-      <button class="cam-script" id="tpOpen">📜 Script</button>
+      <button class="cam-script" id="tpOpen">📜 Teleprompter</button>
     </div>
     <!-- Teleprompter: top half of the screen, close to the front camera so your eyes stay near the lens -->
     <div class="tp" id="tp" hidden>
@@ -217,12 +217,13 @@
     </div>
     <div class="tp-edit" id="tpEdit" hidden>
       <div class="tp-edit-card">
-        <h3>Your script</h3>
-        <p class="note">Paste or type what you want to say. It scrolls at the top of the screen while you record.</p>
-        <textarea id="tpInput" rows="10" placeholder="Paste your script here…"></textarea>
+        <h3>Teleprompter</h3>
+        <p class="note">Paste or type your script. It scrolls at the top of the screen while you record.</p>
+        <textarea id="tpInput" rows="10" placeholder="Type or paste your script here…"></textarea>
+        <div class="tp-count" id="tpCount">0 words · 0 s</div>
         <div class="tp-edit-row">
           <button class="btn btn-ghost" id="tpClear">Clear</button>
-          <button class="btn btn-primary" id="tpSave">Use this script</button>
+          <button class="btn btn-primary" id="tpSave">Use in teleprompter</button>
         </div>
       </div>
     </div>
@@ -236,6 +237,6 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=33"></script>
+  <script type="module" src="/static/js/app.js?v=34"></script>
 </body>
 </html>
