@@ -571,12 +571,27 @@ async function camStart() {
   // iPhone Safari interprets width/height in the camera sensor's (landscape) orientation in
   // some versions and in the screen's orientation in others. Asking the wrong way round
   // returns a cropped, zoomed-in feed, so try both and keep the one that matches the phone.
+  // Full HD matters: a 720p feed gets stretched to 1080x1920 on save, which softens everything
+  // (most visibly the hair edge against the headline). Ask several ways and keep the sharpest
+  // feed shaped like the screen. What the phone gives back is logged for "Report a problem".
   const attempts = [
     { width: { ideal: 1920 }, height: { ideal: 1080 } },
     { width: { ideal: 1080 }, height: { ideal: 1920 } },
+    { width: { ideal: 1080 }, height: { ideal: 1920 }, aspectRatio: { ideal: 9 / 16 } },
+    { width: { ideal: 3840 }, height: { ideal: 2160 } },
     { width: { ideal: 1280 }, height: { ideal: 720 } },
   ];
+  // The real picture size, from the frames themselves (settings can be reported sideways).
+  const frameSize = (stream) => new Promise((resolve) => {
+    const t = document.createElement("video");
+    t.muted = true; t.playsInline = true; t.srcObject = stream;
+    const done = () => { resolve([t.videoWidth, t.videoHeight]); t.srcObject = null; };
+    t.onloadedmetadata = done;
+    setTimeout(done, 900);
+    t.play().catch(() => {});
+  });
   let best = null, bestScore = -1;
+  const tried = [];
   for (const size of attempts) {
     let stream;
     try {
@@ -585,17 +600,20 @@ async function camStart() {
       if (audio !== true) { // that mic wasn't available: fall back to the default one
         audio = true;
         try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cam.facing, frameRate: { ideal: 30 }, ...size }, audio }); }
-        catch { continue; }
-      } else continue;
+        catch (e2) { tried.push({ ask: size, error: e2.name }); continue; }
+      } else { tried.push({ ask: size, error: e.name }); continue; }
     }
     const st = stream.getVideoTracks()[0].getSettings();
-    const w = st.width || 0, h = st.height || 0;
+    let [w, h] = await frameSize(stream);
+    if (!w || !h) [w, h] = [st.width || 0, st.height || 0];
+    tried.push({ ask: size, settings: [st.width, st.height], frames: [w, h] });
     const matches = portrait ? h >= w : w >= h;
     const score = (matches ? 1e7 : 0) + Math.min(w, h) * Math.max(w, h) / 1000;
     if (score > bestScore) { best?.getTracks().forEach((t) => t.stop()); best = stream; bestScore = score; }
     else stream.getTracks().forEach((t) => t.stop());
-    if (matches && Math.min(w, h) >= 1080) break; // good enough — stop asking
+    if (matches && Math.min(w, h) >= 1080) break; // full HD and the right way up — done
   }
+  dlog("camera sizes tried", { facing: cam.facing, portrait, tried });
   if (!best) throw new Error("camera unavailable");
   cam.stream = best;
   const track = best.getVideoTracks()[0];
