@@ -795,3 +795,11 @@ body.cam-open { overflow: hidden; }
 .hbtn, .hbtn-ai { padding: 5px 12px; }
 .hbtn .hbtn-ico, .hbtn-ai .hbtn-ico { width: 33px; height: 33px; font-size: 19px; }
 .share-row { gap: 3px; } .share-row span { font-size: 10.5px; padding: 3px 6px; }
+/* Taller screens (e.g. the home-screen app): bigger start buttons to use the space */
+@media (min-height: 780px) {
+  .hero-btns { gap: 9px; margin-top: 12px; }
+  .hbtn, .hbtn-ai { padding: 9px 16px; border-radius: 18px; gap: 14px; }
+  .hbtn .hbtn-ico, .hbtn-ai .hbtn-ico { width: 41px; height: 41px; font-size: 23px; border-radius: 12px; }
+  .hbtn .hbtn-txt, .hbtn-ai .hbtn-txt { font-size: 19px; }
+  .hbtn-txt small { font-size: 13px; margin-top: 2px; }
+}
