@@ -616,6 +616,10 @@ function camStartRec() {
     cam.rec = null;
     camRecUI(false);
     if (!blob.size) { toast("Nothing was recorded — please try again."); return; }
+    // Release the camera while the take plays back: on iPhone, playing a video while the camera
+    // is live can freeze the camera feed. Retake opens a fresh camera.
+    cam.stream?.getTracks().forEach((t) => t.stop());
+    cam.stream = null;
     camReview(new File([blob], `recording.${type.includes("webm") ? "webm" : "mp4"}`, { type }));
   };
   rec.onerror = (e) => dlog("recorder error", { message: String(e.error?.message || e.error || e) });
@@ -682,12 +686,18 @@ function camReviewClose() {
   cam.reviewUrl = null; cam.reviewFile = null;
   $("camReview").hidden = true;
 }
-$("camRetake").addEventListener("click", () => {
+$("camRetake").addEventListener("click", async () => {
   if (!confirm("Delete this take and record again?")) return;
   dlog("take discarded", { take: cam.take });
   camReviewClose();
   tpRestart(); // script back to the beginning
-  toast("Ready — tap the red button when you are.");
+  try {
+    await camStart(); // fresh camera feed
+    toast("Ready — tap the red button when you are.");
+  } catch (e) {
+    dlog("camera restart failed", { message: String(e?.message || e) });
+    toast("Couldn't restart the camera — close it and tap Record again.", 4500);
+  }
 });
 $("camUse").addEventListener("click", () => {
   const file = cam.reviewFile; if (!file) return;
