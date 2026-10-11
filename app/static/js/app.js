@@ -8,8 +8,8 @@ video.setAttribute("playsinline", "");
 video.preload = "auto";
 
 const state = { project: null, settings: null, status: null, sheet: null, wizard: null, exportUrl: null };
-const FONTS_CAPTION = ["Montserrat", "Anton", "Bebas Neue", "Poppins", "Oswald", "Playfair"];
-const FONTS_HEADLINE = ["Anton", "Bebas Neue", "Oswald", "Montserrat", "Playfair"];
+const FONTS_CAPTION = ["Montserrat", "Bebas Neue", "Lobster", "Anton", "Poppins", "Oswald", "Playfair"];
+const FONTS_HEADLINE = ["Anton", "Bebas Neue", "Lobster", "Oswald", "Montserrat", "Playfair"];
 const brandFonts = () => (state.settings?.fonts || []).map((f) => f.name);
 
 // Make uploaded brand fonts available to the preview canvas.
@@ -238,6 +238,11 @@ function setSize(sz) {
   placeSizeHint();
   setTimeout(placeSizeHint, 260); // after the resize animation
 }
+// While editing, the video fills whatever space the edit panel leaves free.
+new ResizeObserver(() => {
+  const sh = $("sheet");
+  document.documentElement.style.setProperty("--sheet-h", `${sh.hidden ? 0 : Math.round(sh.getBoundingClientRect().height)}px`);
+}).observe($("sheet"));
 // "Make video bigger / smaller" buttons beside the video.
 function stepSize(d) {
   const k = Math.max(0, Math.min(SIZES.length - 1, SIZES.indexOf(state.size || "m") + d));
@@ -1269,6 +1274,13 @@ function slider(label, { min, max, step = 1, value, fmt: f = (v) => v, oninput }
   inp.addEventListener("input", () => { paint(); out.textContent = f(+inp.value); oninput(+inp.value); });
   return el("div", { class: "field" }, el("div", { class: "row" }, el("label", { class: "label" }, label), out), inp);
 }
+// Advanced settings stay tucked away so each step shows just a few big choices.
+function more(open, ...kids) {
+  const d = el("details", { class: "more" }, el("summary", {}, "More options"), ...kids.flat().filter(Boolean));
+  if (open) d.open = true;
+  d.addEventListener("toggle", () => store("lp_more_" + (state.sheet || ""), d.open ? "1" : null));
+  return d;
+}
 function chips(label, options, current, onpick) {
   const wrap = el("div", { class: "chips" });
   const draw = (cur) => {
@@ -1392,10 +1404,14 @@ function trimSheet() {
     video.currentTime = which === "l" ? p.trim.start : Math.max(p.trim.start, p.trim.end - 0.04);
     paint(); save(["trim"]);
   };
+  const cutBits = cutControls(paint);
+  const pauseBits = cutBits.splice(-3); // [title, toggle, note]
   return [
-    el("p", { class: "note" }, "Drag the yellow handles to cut the start and end. The preview shows the exact frame. Tap the strip to scrub."),
+    el("p", { class: "note" }, "Drag the yellow handles to cut the start and end."),
     labels,
     wrap,
+    pauseBits[1],
+    more(recall("lp_more_trim") || pendingCut != null || (p.cuts || []).length > 0,
     el("div", { class: "nudges" },
       el("div", { class: "nudge" }, el("span", { class: "label" }, "Start"),
         el("button", { class: "small-btn", onclick: nudge("l", -0.1) }, "−0.1s"),
@@ -1407,7 +1423,8 @@ function trimSheet() {
       el("button", { class: "small-btn", onclick: () => { p.trim.start = +Math.min(video.currentTime, p.trim.end - MIN).toFixed(2); paint(); save(["trim"]); } }, "Start at playhead"),
       el("button", { class: "small-btn", onclick: () => { p.trim.end = +Math.max(video.currentTime, p.trim.start + MIN).toFixed(2); paint(); save(["trim"]); } }, "End at playhead")),
     el("button", { class: "small-btn wide", onclick: () => { p.trim = { start: 0, end: dur }; save(["trim"]); refreshSheet(); } }, "Reset trim"),
-    ...cutControls(paint),
+    ...cutBits,
+    pauseBits[2]),
   ];
 }
 
@@ -1542,17 +1559,17 @@ function logoSheet() {
   grid.append(el("label", { class: "logo-opt logo-add" }, inp, "+ Add logo"));
   const pos = { tl: [0.2, 0.07], top: [0.5, 0.07], tr: [0.8, 0.07], bl: [0.2, 0.93], bottom: [0.5, 0.93], br: [0.8, 0.93] };
   return [
-    toggle("Show logo", !!l.enabled, (v) => { l.enabled = v; changed(); }),
-    el("div", { class: "field" }, el("label", { class: "label" }, "Choose logo"), grid,
-      el("p", { class: "note" }, "PNG with a transparent background looks best.")),
-    el("p", { class: "note" }, "Drag the logo on the preview to move it. Pinch to resize."),
-    chips("Quick position", [["tl", "↖"], ["top", "Top"], ["tr", "↗"], ["bl", "↙"], ["bottom", "Bottom"], ["br", "↘"]], null, (v) => { [l.x, l.y] = pos[v]; changed(); }),
+    toggle("Show my logo", !!l.enabled, (v) => { l.enabled = v; changed(); }),
+    grid,
+    chips("Where?", [["tl", "↖"], ["top", "Top"], ["tr", "↗"], ["bl", "↙"], ["bottom", "Bottom"], ["br", "↘"]], null, (v) => { [l.x, l.y] = pos[v]; changed(); }),
+    more(recall("lp_more_logo"),
+    el("p", { class: "note" }, "Drag the logo on the video to move it, pinch to resize. A PNG with a see-through background looks best."),
     slider("Size", { min: 0.06, max: 0.9, step: 0.01, value: l.w ?? 0.3, fmt: (v) => `${Math.round(v * 100)}%`, oninput: (v) => { l.w = v; changed(); } }),
     slider("Opacity", { min: 0.2, max: 1, step: 0.05, value: l.opacity ?? 1, fmt: (v) => `${Math.round(v * 100)}%`, oninput: (v) => { l.opacity = v; changed(); } }),
     el("button", { class: "small-btn wide", onclick: async () => {
       state.settings = await api("/api/settings", { method: "PUT", json: { defaultLogo: l.id, logoDefaults: { x: l.x, y: l.y, w: l.w, opacity: l.opacity ?? 1 } } });
       toast("Saved — new videos will use this logo and position.");
-    } }, "★ Save as my default"),
+    } }, "★ Save as my default")),
   ];
 }
 
@@ -1615,14 +1632,13 @@ function musicSheet() {
     el("div", { class: "row" },
       el("div", { class: "music-name" }, m.file ? `♪ ${m.name || "Music"}` : "No music yet"),
       el("label", { class: "small-btn" }, inp, m.file ? "Change" : "Choose music")),
-    el("p", { class: "note" }, "Pick an MP3/M4A saved in your Files app. (Songs from Apple Music are copy-protected and can't be used.)"),
+    m.file ? null : el("p", { class: "note" }, "Optional. Pick an MP3/M4A from your Files app (Apple Music songs can't be used)."),
     m.file ? toggle("Use music", m.enabled !== false, (v) => { m.enabled = v; changed(); }) : null,
     m.file ? volumeRocker(m, changed) : null,
-    m.file ? toggle("Auto-lower music while I talk", m.autoDuck === true, (v) => { m.autoDuck = v; changed(); }) : null,
-    m.file ? el("p", { class: "note" }, "Off = the music stays at exactly the level you set. Press ▶ to hear it while you adjust.") : null,
-    el("hr", { style: "border:0;border-top:1px solid rgba(255,255,255,.08);width:100%" }),
-    toggle("Clean up my voice", p.audio?.clean !== false, (v) => { p.audio = { ...(p.audio || {}), clean: v }; save(["audio"]); }),
-    el("p", { class: "note" }, "Removes background noise, makes speech clearer and evens out loudness. Applied when you save."),
+    more(recall("lp_more_music"),
+      m.file ? toggle("Auto-lower music while I talk", m.autoDuck === true, (v) => { m.autoDuck = v; changed(); }) : null,
+      toggle("Clean up my voice", p.audio?.clean !== false, (v) => { p.audio = { ...(p.audio || {}), clean: v }; save(["audio"]); }),
+      el("p", { class: "note" }, "Voice cleanup removes background noise and evens out loudness when you save.")),
   ];
 }
 
@@ -1645,21 +1661,16 @@ function zoomSheet() {
 }
 
 // ----- guided-step builders -----
+// Three simple looks: big & boxy, thin, fun & curly.
 const CAPTION_PRESETS = [
-  { name: "Red Box", style: { font: "Montserrat", color: "#FFFFFF", highlight: "#E3202A", highlightStyle: "box", boxText: "#FFFFFF", stroke: 7, uppercase: true, animation: "pop", size: 64 } },
-  { name: "Gold Box", style: { font: "Montserrat", color: "#FFFFFF", highlight: "#F2C230", highlightStyle: "box", boxText: "#111111", stroke: 7, uppercase: true, animation: "pop", size: 64 } },
-  { name: "Bold Pop", style: { font: "Montserrat", color: "#FFFFFF", highlight: "#F2C230", highlightStyle: "color", stroke: 7, uppercase: true, animation: "pop", size: 66 } },
-  { name: "LolliPOP Red", style: { font: "Anton", color: "#FFFFFF", highlight: "#E3202A", highlightStyle: "color", stroke: 7, uppercase: true, animation: "pop", size: 78 } },
-  { name: "News", style: { font: "Oswald", color: "#FFFFFF", highlight: "#E3202A", highlightStyle: "color", stroke: 6, uppercase: true, animation: "pop", size: 72 } },
-  { name: "Clean", style: { font: "Poppins", color: "#FFFFFF", highlight: "#FFFFFF", highlightStyle: "color", stroke: 5, uppercase: false, animation: "none", size: 58 } },
-  { name: "Elegant", style: { font: "Playfair", color: "#F4EFE9", highlight: "#F2C230", highlightStyle: "color", stroke: 6, uppercase: false, animation: "pop", size: 70 } },
-  { name: "Bebas Gold", style: { font: "Bebas Neue", color: "#FFFFFF", highlight: "#F2C230", highlightStyle: "color", stroke: 6, uppercase: true, animation: "pop", size: 84 } },
+  { name: "Big & Boxy", style: { font: "Montserrat", color: "#FFFFFF", highlight: "#E3202A", highlightStyle: "box", boxText: "#FFFFFF", stroke: 7, uppercase: true, animation: "pop", size: 64 } },
+  { name: "Thin", style: { font: "Bebas Neue", color: "#FFFFFF", highlight: "#F2C230", highlightStyle: "color", stroke: 6, uppercase: true, animation: "pop", size: 84 } },
+  { name: "Fun & Curly", style: { font: "Lobster", color: "#FFFFFF", highlight: "#F2C230", highlightStyle: "color", stroke: 6, uppercase: false, animation: "pop", size: 72 } },
 ];
 const HEADLINE_PRESETS = [
-  { name: "Cinematic", font: "Anton", color: "#E9E1D3", accent: "#D7262E" },
-  { name: "Bold Gold", font: "Bebas Neue", color: "#FFFFFF", accent: "#F2C230" },
-  { name: "Classic", font: "Playfair", color: "#F4EFE9", accent: "#E3202A" },
-  { name: "Modern", font: "Montserrat", color: "#FFFFFF", accent: "#E3202A" },
+  { name: "Big & Boxy", font: "Anton", color: "#E9E1D3", accent: "#D7262E", block: true },
+  { name: "Thin", font: "Bebas Neue", color: "#FFFFFF", accent: "#F2C230", block: true },
+  { name: "Fun & Curly", font: "Lobster", color: "#FFFFFF", accent: "#F2C230", block: false },
 ];
 
 function presetCard({ label, sample, font, color, accent, upper, on, onpick, box = false, boxText = "#FFFFFF" }) {
@@ -1675,33 +1686,30 @@ function presetCard({ label, sample, font, color, accent, upper, on, onpick, box
 function captionsStep() {
   const p = state.project, c = p.captions, s = c.style;
   const changed = () => save(["captions"]);
-  const same = (st) => c.enabled !== false && st.font === s.font && st.highlight === s.highlight && st.color === s.color
+  const same = (st) => c.enabled !== false && st.font === s.font && st.highlight === s.highlight
     && (st.highlightStyle || "color") === (s.highlightStyle || "color");
-  const grid = el("div", { class: "presets" },
+  const grid = el("div", { class: "presets presets-4" },
     ...CAPTION_PRESETS.map((pr) => presetCard({
       label: pr.name, sample: "Your first home", font: pr.style.font, color: pr.style.color, accent: pr.style.highlight,
       upper: pr.style.uppercase, on: same(pr.style), box: pr.style.highlightStyle === "box", boxText: pr.style.boxText,
       onpick: () => { Object.assign(s, pr.style); c.enabled = true; changed(); refreshSheet(); },
     })),
     el("button", { class: `preset off${c.enabled === false ? " on" : ""}`, onclick: () => { c.enabled = false; changed(); refreshSheet(); } },
-      el("div", { class: "preset-sample" }, "—"), el("div", { class: "preset-name" }, "No captions")));
+      el("div", { class: "preset-sample" }, "—"), el("div", { class: "preset-name" }, "None")));
   const out = [];
   if (!(c.lines || []).length) {
-    out.push(el("p", { class: "note warn" }, "No speech was transcribed, so there are no captions to show. (Check the yellow note on the main screen.)"));
+    out.push(el("p", { class: "note warn" }, "No speech was found, so there are no captions to show."));
   }
-  out.push(grid);
+  out.push(el("p", { class: "note" }, "Tap a look."), grid);
   if (c.enabled !== false) {
     out.push(
-      chips("Position", [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]],
+      chips("Where on screen?", [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]],
         s.y < 0.35 ? "top" : s.y < 0.6 ? "middle" : "bottom",
         (v) => { s.y = { top: 0.2, middle: 0.5, bottom: 0.72 }[v]; s.x = 0.5; changed(); }),
-      slider("Size", { min: 32, max: 140, value: s.size || 66, oninput: (v) => { s.size = v; changed(); } }),
-      fontPicker("Or choose a font", FONTS_CAPTION, s.font, (v) => { s.font = v; changed(); }));
-    if ((c.lines || []).length) {
-      const det = el("details", { class: "fix" }, el("summary", {}, "Fix a misspelled word"));
-      det.append(captionLinesList());
-      out.push(det);
-    }
+      more(recall("lp_more_captions"),
+        slider("Size", { min: 32, max: 140, value: s.size || 66, oninput: (v) => { s.size = v; changed(); } }),
+        fontPicker("Font", FONTS_CAPTION, s.font, (v) => { s.font = v; changed(); }),
+        (c.lines || []).length ? el("div", { class: "field" }, el("label", { class: "label" }, "Fix a misspelled word"), captionLinesList()) : null));
   }
   return out;
 }
@@ -1729,27 +1737,28 @@ function captionLinesList() {
 function headlineStep() {
   const h = state.project.headline;
   const changed = () => { save(["headline"]); if (preview.needsMask()) preview.ensureMasker(); };
-  const ta = el("textarea", { rows: 2, placeholder: "YOUR *FIRST HOME*\nSTARTS HERE" });
+  const ta = el("textarea", { rows: 2, placeholder: "Type a headline (or leave empty)\ne.g. YOUR *FIRST HOME*" });
   ta.value = h.text || "";
   ta.addEventListener("input", () => { h.text = ta.value; h.enabled = !!h.text.trim(); changed(); });
   const sample = (h.text || "").replace(/\*/g, "").split(/\s+/).filter(Boolean).slice(0, 3).join(" ") || "Big news today";
   return [
-    el("p", { class: "note" }, "Optional headline behind you. Put *stars* around words to color them."),
+    el("p", { class: "note" }, "Big words behind you. Optional — leave empty to skip. *Stars* color a word."),
     ta,
-    el("div", { class: "presets" }, ...HEADLINE_PRESETS.map((pr) => presetCard({
-      label: pr.name, sample, font: pr.font, color: pr.color, accent: pr.accent, upper: true,
-      on: h.font === pr.font && h.accent === pr.accent,
-      onpick: () => { Object.assign(h, { font: pr.font, color: pr.color, accent: pr.accent }); changed(); refreshSheet(); },
+    el("div", { class: "presets presets-3" }, ...HEADLINE_PRESETS.map((pr) => presetCard({
+      label: pr.name, sample, font: pr.font, color: pr.color, accent: pr.accent, upper: pr.font !== "Lobster",
+      on: h.font === pr.font,
+      onpick: () => { Object.assign(h, { font: pr.font, color: pr.color, accent: pr.accent, block: pr.block, uppercase: pr.font !== "Lobster" }); changed(); refreshSheet(); },
     }))),
-    slider("Size", { min: 50, max: 320, value: h.size || 130, oninput: (v) => { h.size = v; changed(); } }),
-    swatches("Headline color", null, h.color, (v) => { h.color = v; changed(); }),
-    swatches("*Starred* word color", null, h.accent, (v) => { h.accent = v; changed(); }),
-    fontPicker("Or choose a font", FONTS_HEADLINE, h.font, (v) => { h.font = v; changed(); }),
-    el("div", { class: "toggles" },
-      toggle("Square block", h.block !== false, (v) => { h.block = v; changed(); }),
-      toggle("Behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); refreshSheet(); }),
-      h.behind !== false ? toggle("Extra-sharp (slower save)", h.cutout === "best", (v) => { h.cutout = v ? "best" : "sharp"; changed(); }) : null),
-    el("p", { class: "note" }, "Tip: drag the headline on the preview to move it, pinch to resize."),
+    more(recall("lp_more_headline"),
+      slider("Size", { min: 50, max: 320, value: h.size || 130, oninput: (v) => { h.size = v; changed(); } }),
+      swatches("Color", null, h.color, (v) => { h.color = v; changed(); }),
+      swatches("*Starred* word color", null, h.accent, (v) => { h.accent = v; changed(); }),
+      fontPicker("Font", FONTS_HEADLINE, h.font, (v) => { h.font = v; changed(); }),
+      el("div", { class: "toggles" },
+        toggle("Square block", h.block !== false, (v) => { h.block = v; changed(); }),
+        toggle("Behind me (AI cut-out)", h.behind !== false, (v) => { h.behind = v; changed(); refreshSheet(); }),
+        h.behind !== false ? toggle("Extra-sharp (slower save)", h.cutout === "best", (v) => { h.cutout = v ? "best" : "sharp"; changed(); }) : null),
+      el("p", { class: "note" }, "Tip: drag the headline on the video to move it, pinch to resize.")),
   ];
 }
 
@@ -1783,7 +1792,7 @@ function brollStep() {
       : "B-roll is off. Add a Pixabay key in Render, or upload your own clips under “My clips”.")];
   }
   return [
-    el("p", { class: "note" }, "AI picked these clips to show while you talk. Tap one to preview it. Remove any you don't like, or Swap for a different clip."),
+    el("p", { class: "note" }, "AI picked these clips to show while you talk. Tap one to see it."),
     el("div", { class: "bgrid" }, ...list.map((b) => el("div", { class: `bclip${b.removed ? " removed" : ""}` },
       el("div", { class: "bclip-thumb", onclick: () => { preview.pause(); video.currentTime = b.start + 0.05; } },
         el("img", { src: `${base}/${b.thumb}`, alt: "" }),
@@ -1846,7 +1855,7 @@ async function boot() {
     state.status = await api("/api/status");
     state.settings = await api("/api/settings");
     loadBrandFonts();
-    await Promise.all(["Anton", "Bebas Neue", "Oswald", "Montserrat", "Poppins", "Playfair"].map((f) => document.fonts.load(`40px "${f}"`)));
+    await Promise.all(["Anton", "Bebas Neue", "Oswald", "Montserrat", "Poppins", "Playfair", "Lobster"].map((f) => document.fonts.load(`40px "${f}"`)));
     // Always open on the start page; the last video is one tap away.
     const last = recall("lp_project");
     if (last) {

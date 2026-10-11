@@ -4,6 +4,7 @@
 @font-face { font-family: "Oswald"; src: url(/static/fonts/Oswald-Bold.ttf); font-display: block; }
 @font-face { font-family: "Montserrat"; src: url(/static/fonts/Montserrat-ExtraBold.ttf); font-display: block; }
 @font-face { font-family: "Poppins"; src: url(/static/fonts/Poppins-Bold.ttf); font-display: block; }
+@font-face { font-family: "Lobster"; src: url(/static/fonts/Lobster-Regular.ttf); font-display: block; }
 @font-face { font-family: "Playfair"; src: url(/static/fonts/PlayfairDisplay-BoldItalic.ttf); font-display: block; }
 @font-face { font-family: "Playfair Upright"; src: url(/static/fonts/PlayfairDisplay-ExtraBold.ttf); font-display: block; }
 
@@ -911,3 +912,26 @@ body.sheet-open[data-size="s"] .stage { width: calc((27svh - 70px) * 9 / 16); }
 .stage-row > .size-side { grid-column: 3; grid-row: 1; }
 /* main screen (not editing): just center the video */
 body:not(.sheet-open) .stage-row { display: flex; justify-content: center; }
+
+/* "More options" — advanced settings tucked away */
+.more { border: 1px solid var(--line); border-radius: 12px; padding: 0 10px; background: rgba(255,255,255,.02); }
+.more > summary { list-style: none; cursor: pointer; padding: 9px 0; font-weight: 800; font-size: 13.5px; color: var(--gold); display: flex; align-items: center; gap: 6px; }
+.more > summary::-webkit-details-marker { display: none; }
+.more > summary::before { content: "⚙️"; }
+.more > summary::after { content: "▸"; margin-left: auto; transition: transform .15s; }
+.more[open] > summary::after { transform: rotate(90deg); }
+.more[open] { padding-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+.sheet .presets.presets-4 { grid-template-columns: repeat(4, 1fr); }
+.sheet .presets.presets-3 { grid-template-columns: repeat(3, 1fr); }
+.sheet .presets-3 .preset, .sheet .presets-4 .preset { min-height: 74px; }
+.sheet .presets-3 .preset-sample, .sheet .presets-4 .preset-sample { font-size: 15px; }
+body.sheet-open #btnAuto, body.sheet-open #btnSave, body.sheet-open #btnFine, body.sheet-open #fineTune, body.sheet-open #btnReport { display: none !important; }
+/* stage fills the space above the edit panel (the panel's height is measured into --sheet-h) */
+body.sheet-open[data-size="s"] .stage,
+body.sheet-open[data-size="m"] .stage,
+body.sheet-open[data-size="l"] .stage { width: min(calc(100vw - 230px), calc((100svh - var(--sheet-h, 60svh) - 72px) * 9 / 16)); min-width: 0; }
+body.sheet-open .size-note { max-width: 92px; font-size: 11px; }
+body.sheet-open .size-step { width: 86px; font-size: 11.5px; }
+body.sheet-open[data-size="s"] .stage,
+body.sheet-open[data-size="m"] .stage,
+body.sheet-open[data-size="l"] .stage { width: min(calc(100vw - 210px), calc((100svh - var(--sheet-h, 60svh) - 72px) * 9 / 16)); }

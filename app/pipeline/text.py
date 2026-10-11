@@ -13,6 +13,7 @@ FONTS = {
     "Montserrat": "Montserrat-ExtraBold.ttf",
     "Poppins": "Poppins-Bold.ttf",
     "Playfair": "PlayfairDisplay-BoldItalic.ttf",
+    "Lobster": "Lobster-Regular.ttf",
 }
 
 W, H = config.OUT_W, config.OUT_H
