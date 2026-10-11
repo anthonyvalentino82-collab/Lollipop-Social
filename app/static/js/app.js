@@ -516,6 +516,8 @@ async function camStart() {
   $("camQuality").textContent = short ? `${short >= 1080 ? "HD" : short + "p"} · ${Math.round(st.frameRate || 30)}` : "";
 }
 function camStop() {
+  camCountdownCancel();
+  clearTimeout(cam.tpDelay);
   if (cam.rec && cam.rec.state !== "inactive") { cam.rec.onstop = null; cam.rec.stop(); }
   cam.rec = null;
   camRecUI(false);
@@ -560,7 +562,33 @@ $("camFlip").addEventListener("click", async () => {
 });
 $("camRec").addEventListener("click", () => {
   if (!cam.stream) return;
-  if (cam.rec) { if (cam.rec.state === "paused") cam.rec.resume(); cam.rec.stop(); return; }
+  if (cam.rec) { clearTimeout(cam.tpDelay); if (cam.rec.state === "paused") cam.rec.resume(); cam.rec.stop(); return; }
+  if (cam.counting) { camCountdownCancel(); return; } // tap again during 3-2-1 to cancel
+  camCountdown(camStartRec);
+});
+// 3-2-1 before recording so you can get set and read the first line.
+function camCountdown(done) {
+  let n = 3;
+  const box = $("camCount");
+  cam.counting = true;
+  $("camRec").classList.add("counting");
+  const show = () => { box.hidden = false; box.textContent = n; box.classList.remove("pop"); void box.offsetWidth; box.classList.add("pop"); };
+  show();
+  cam.countTimer = setInterval(() => {
+    n -= 1;
+    if (n > 0) { show(); return; }
+    camCountdownCancel();
+    done();
+  }, 1000);
+}
+function camCountdownCancel() {
+  clearInterval(cam.countTimer);
+  cam.counting = false;
+  $("camCount").hidden = true;
+  $("camRec").classList.remove("counting");
+}
+function camStartRec() {
+  if (!cam.stream || cam.rec) return;
   const mimeType = camMime();
   cam.chunks = [];
   const rec = new MediaRecorder(cam.stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 192_000 });
@@ -593,14 +621,16 @@ $("camRec").addEventListener("click", () => {
   rec.onerror = (e) => dlog("recorder error", { message: String(e.error?.message || e.error || e) });
   cam.stallLogged = false;
   dlog("recording started", { mimeType: rec.mimeType || mimeType });
-  tpPlay(true); // teleprompter rolls with the recording
   rec.start(); // one continuous recording (1-second slices can drop audio on iPhone)
+  // Hold the first line on screen for a moment, then start scrolling.
+  clearTimeout(cam.tpDelay);
+  cam.tpDelay = setTimeout(() => { if (cam.rec === rec && rec.state === "recording") tpPlay(true); }, 2000);
   cam.t0 = Date.now();
   cam.pausedMs = 0; cam.pausedAt = 0;
   camRecUI(true);
   $("camTime").textContent = "0:00";
   cam.timer = setInterval(() => { $("camTime").textContent = fmt(camElapsed()); }, 250);
-});
+}
 // Recording time, not counting pauses.
 function camElapsed() {
   const now = cam.pausedAt || Date.now();
