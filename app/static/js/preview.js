@@ -18,6 +18,9 @@ export class Preview {
     this.selected = null; this.selectedUntil = 0;
     this.ghostCaptions = false;
     this.logoImg = null;
+    this.wm = new Image();
+    this.wm.onload = () => this.draw();
+    this.wm.src = "/static/brand/watermark.png";
     this.brollVids = {};
     this.person = document.createElement("canvas");
     this.person.width = this.CW; this.person.height = this.CH;
@@ -260,6 +263,11 @@ export class Preview {
       if (hit) this.drawCaption(p.captions.style || {}, hit, ghost);
     }
     if (p.logo && p.logo.enabled && this.logoImg && this.logoImg.naturalWidth) this.drawLogo(p.logo);
+    // Small "LolliPOP" watermark, bottom-left (matches the saved video).
+    if (this.wm.naturalWidth) {
+      const k = this.k;
+      this.ctx.drawImage(this.wm, 26 * k, (OH - this.wm.naturalHeight - 26) * k, this.wm.naturalWidth * k, this.wm.naturalHeight * k);
+    }
     this.drawSelection();
   }
 
@@ -414,7 +422,29 @@ export class Preview {
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(242,194,48,.95)";
     ctx.strokeRect((x0 - pad) * k, (y0 - pad) * k, (x1 - x0 + pad * 2) * k, (y1 - y0 + pad * 2) * k);
+    // One-thumb resize handle on the bottom-right corner: drag it out = bigger, in = smaller.
+    const [hx, hy] = this.handlePos(sel), r = this.handleR();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(hx * k, hy * k, r * k, 0, Math.PI * 2);
+    ctx.fillStyle = "#F2C230"; ctx.shadowColor = "rgba(0,0,0,.6)"; ctx.shadowBlur = 8; ctx.fill();
+    ctx.shadowBlur = 0; ctx.lineWidth = 2.5; ctx.strokeStyle = "#2a0a0c";
+    const a = r * 0.45 * k, cx = hx * k, cy = hy * k;
+    ctx.beginPath();
+    ctx.moveTo(cx - a, cy - a); ctx.lineTo(cx + a, cy + a);
+    ctx.moveTo(cx - a, cy - a); ctx.lineTo(cx - a * 0.2, cy - a); ctx.moveTo(cx - a, cy - a); ctx.lineTo(cx - a, cy - a * 0.2);
+    ctx.moveTo(cx + a, cy + a); ctx.lineTo(cx + a * 0.2, cy + a); ctx.moveTo(cx + a, cy + a); ctx.lineTo(cx + a, cy + a * 0.2);
+    ctx.stroke();
     ctx.restore();
+  }
+
+  // Handle size: about a fingertip (~24 screen px) whatever size the preview is.
+  handleR() {
+    const w = this.canvas.getBoundingClientRect().width || 300;
+    return 24 * OW / w;
+  }
+  handlePos(key) {
+    const [x0, y0, x1, y1] = this.boxes[key], pad = 14;
+    return [Math.min(OW - 4, x1 + pad), Math.min(OH - 4, y1 + pad)];
   }
 
   // ---- gestures ----
@@ -458,9 +488,23 @@ export class Preview {
       this.pointers.set(e.pointerId, this.toOut(e));
       if (this.pointers.size === 1) {
         const pt = this.toOut(e);
+        // Grabbed the gold corner handle of the selected item: one-thumb resize.
+        const sel = this.selected;
+        if (sel && this.boxes[sel] && performance.now() < this.selectedUntil) {
+          const [hx, hy] = this.handlePos(sel);
+          if (Math.hypot(pt[0] - hx, pt[1] - hy) < this.handleR() * 1.6) {
+            const [x0, y0, x1, y1] = this.boxes[sel];
+            const c = [(x0 + x1) / 2, (y0 + y1) / 2];
+            this.gesture = { key: sel, start: pt, last: pt, t0: performance.now(), moved: true,
+              resize: { c, d0: Math.max(20, Math.hypot(pt[0] - c[0], pt[1] - c[1])), s0: this.sizeOf(sel) } };
+            return;
+          }
+        }
         const key = this.hitTest(pt);
         this.gesture = { key, start: pt, last: pt, t0: performance.now(), moved: false };
-        if (key) { this.selected = key; this.selectedUntil = performance.now() + 1500; }
+        // Tapping an item keeps it selected (with its resize handle) until you tap elsewhere.
+        if (key) { this.selected = key; this.selectedUntil = performance.now() + 120000; }
+        else { this.selected = null; }
       } else if (this.pointers.size === 2 && this.gesture) {
         const key = this.gesture.key || this.selected;
         if (key) {
@@ -473,11 +517,17 @@ export class Preview {
       if (!this.pointers.has(e.pointerId) || !this.gesture) return;
       this.pointers.set(e.pointerId, this.toOut(e));
       const g = this.gesture;
+      if (g.resize) {
+        const pt = this.toOut(e);
+        const d = Math.hypot(pt[0] - g.resize.c[0], pt[1] - g.resize.c[1]);
+        this.setSize(g.key, g.resize.s0 * d / g.resize.d0);
+        this.draw();
+        return;
+      }
       if (g.pinch && this.pointers.size >= 2) {
         const [a, b] = [...this.pointers.values()];
         const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
         this.setSize(g.key, g.pinch.s0 * d / Math.max(1, g.pinch.d0));
-        this.selectedUntil = performance.now() + 1500;
         this.draw();
         return;
       }
@@ -490,7 +540,6 @@ export class Preview {
         o._rawX = Math.min(1, Math.max(0, nx));
         o.x = Math.abs(o._rawX - 0.5) < 0.015 ? 0.5 : o._rawX; // snap to centre
         o.y = Math.min(1, Math.max(0, ny));
-        this.selectedUntil = performance.now() + 1500;
         this.draw();
       }
       g.last = pt;

@@ -23,6 +23,9 @@ from .vision import PersonSegmenter
 W, H, FPS = config.OUT_W, config.OUT_H, config.OUT_FPS
 
 
+WM_MARGIN = 26  # watermark distance from the left and bottom edges (output pixels)
+
+
 def _rgba_to_np(img: Image.Image):
     """PIL RGBA -> (BGR uint8 image, float32 alpha 0..1 as HxW)."""
     a = np.asarray(img)
@@ -125,6 +128,12 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
             head_box = (x0, y0, x1, y1)
             head_np = _rgba_to_np(head_img.crop(bbox))
     logo = _logo_layer(project.get("logo", {}), logo_path)
+    # Small "LolliPOP" watermark, bottom-left of every video.
+    wm = None
+    wm_path = config.STATIC_DIR / "brand" / "watermark.png"
+    if wm_path.exists():
+        wm_img = Image.open(wm_path).convert("RGBA")
+        wm = (*_rgba_to_np(wm_img), WM_MARGIN, H - wm_img.height - WM_MARGIN)
     cap = project.get("captions", {})
     cap_style = cap.get("style", {})
     lines = cap.get("lines", []) if cap.get("enabled", True) else []
@@ -214,6 +223,8 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
 
             if logo:
                 _blend(frame, *logo)
+            if wm:
+                _blend(frame, *wm)
 
             enc.stdin.write(frame.tobytes())
             if i % 15 == 0:
