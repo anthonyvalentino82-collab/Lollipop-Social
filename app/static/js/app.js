@@ -528,6 +528,7 @@ async function openCamera() {
   if (!camSupported()) { $("inRecord").click(); return; }
   $("cam").hidden = false;
   document.body.classList.add("cam-open");
+  tpRender(); tpRestart();
   try { await camStart(); }
   catch (e) {
     console.warn(e);
@@ -538,6 +539,8 @@ async function openCamera() {
 }
 function closeCamera() {
   camStop();
+  tpPlay(false);
+  $("tpEdit").hidden = true;
   $("cam").hidden = true;
   document.body.classList.remove("cam-open");
 }
@@ -574,6 +577,7 @@ $("camRec").addEventListener("click", () => {
   rec.onstop = () => {
     const type = rec.mimeType || mimeType || "video/mp4";
     const blob = new Blob(cam.chunks, { type });
+    tpPlay(false);
     dlog("recording stopped", { seconds: (Date.now() - cam.t0) / 1000, sizeMB: +(blob.size / 2 ** 20).toFixed(1), type, chunks: cam.chunks.length });
     cam.rec = null;
     closeCamera();
@@ -584,6 +588,7 @@ $("camRec").addEventListener("click", () => {
   rec.onerror = (e) => dlog("recorder error", { message: String(e.error?.message || e.error || e) });
   cam.stallLogged = false;
   dlog("recording started", { mimeType: rec.mimeType || mimeType });
+  tpPlay(true); // teleprompter rolls with the recording
   rec.start(); // one continuous recording (1-second slices can drop audio on iPhone)
   cam.t0 = Date.now();
   $("camRec").classList.add("on");
@@ -591,6 +596,64 @@ $("camRec").addEventListener("click", () => {
   $("camTime").textContent = "0:00";
   cam.timer = setInterval(() => { $("camTime").textContent = fmt((Date.now() - cam.t0) / 1000); }, 250);
 });
+// ---------- teleprompter ----------
+// Script scrolls in the top half of the camera screen (near the lens). It starts scrolling when
+// you start recording, pauses when you stop, and you can drag it with a finger any time.
+const tp = { speed: +(recall("lp_tp_speed") || 3), size: +(recall("lp_tp_size") || 30), playing: false, raf: 0, last: 0, acc: 0 };
+function tpScript() { return recall("lp_tp_script") || ""; }
+function tpRender() {
+  const text = tpScript().trim();
+  const show = !!text && recall("lp_tp_hidden") !== "1";
+  $("tp").hidden = !show;
+  $("cam").classList.toggle("has-tp", show);
+  $("tpOpen").textContent = text ? "📜 Script" : "📜 Add script";
+  $("tpText").textContent = text;
+  $("tpText").style.fontSize = `${tp.size}px`;
+  $("tpSpeed").textContent = tp.speed;
+}
+function tpTick(now) {
+  if (!tp.playing) return;
+  const dt = Math.min(0.1, (now - (tp.last || now)) / 1000);
+  tp.last = now;
+  const box = $("tpScroll");
+  // Speed 1–10 ≈ lines per 10 s, scaled to the text size so bigger text doesn't race ahead.
+  tp.acc += dt * tp.speed * tp.size * 0.2;
+  if (tp.acc >= 1) { const px = Math.floor(tp.acc); tp.acc -= px; box.scrollTop += px; }
+  if (box.scrollTop + box.clientHeight >= box.scrollHeight - 1) { tpPlay(false); return; }
+  tp.raf = requestAnimationFrame(tpTick);
+}
+function tpPlay(on) {
+  tp.playing = on && !$("tp").hidden;
+  $("tpPlay").textContent = tp.playing ? "⏸" : "▶";
+  cancelAnimationFrame(tp.raf);
+  if (tp.playing) { tp.last = 0; tp.raf = requestAnimationFrame(tpTick); }
+}
+function tpRestart() { tpPlay(false); $("tpScroll").scrollTop = 0; tp.acc = 0; }
+function tpSet(k, v) { tp[k] = v; store(k === "speed" ? "lp_tp_speed" : "lp_tp_size", v); tpRender(); }
+$("tpOpen").addEventListener("click", () => {
+  tpPlay(false);
+  $("tpInput").value = tpScript();
+  $("tpEdit").hidden = false;
+  setTimeout(() => $("tpInput").focus(), 50);
+});
+$("tpSave").addEventListener("click", () => {
+  store("lp_tp_script", $("tpInput").value.trim() || null);
+  store("lp_tp_hidden", null);
+  $("tpEdit").hidden = true;
+  tpRender(); tpRestart();
+});
+$("tpClear").addEventListener("click", () => { $("tpInput").value = ""; $("tpInput").focus(); });
+$("tpEdit").addEventListener("click", (e) => { if (e.target === $("tpEdit")) $("tpEdit").hidden = true; });
+$("tpPlay").addEventListener("click", () => tpPlay(!tp.playing));
+$("tpRestart").addEventListener("click", tpRestart);
+$("tpSlower").addEventListener("click", () => tpSet("speed", Math.max(1, tp.speed - 1)));
+$("tpFaster").addEventListener("click", () => tpSet("speed", Math.min(10, tp.speed + 1)));
+$("tpSmaller").addEventListener("click", () => tpSet("size", Math.max(20, tp.size - 4)));
+$("tpBigger").addEventListener("click", () => tpSet("size", Math.min(56, tp.size + 4)));
+$("tpHide").addEventListener("click", () => { tpPlay(false); store("lp_tp_hidden", "1"); tpRender(); });
+$("tpText").addEventListener("click", () => tpPlay(!tp.playing)); // tap the words to pause / resume
+tpRender();
+
 for (const id of ["btnReport", "btnReport2"]) $(id)?.addEventListener("click", sendReport);
 $("inUpload").addEventListener("change", (e) => { handleVideoFile(e.target.files[0]); e.target.value = ""; });
 $("btnNew").addEventListener("click", () => { if (confirm("Start a new video? (This one stays saved on the server for 14 days.)")) resetToEmpty(); });

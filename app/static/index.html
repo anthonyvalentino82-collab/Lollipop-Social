@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon-v2.png">
   <link rel="icon" href="/static/brand/favicon-v2.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=40">
+  <link rel="stylesheet" href="/static/css/app.css?v=41">
 </head>
 <body>
   <div class="app">
@@ -201,6 +201,30 @@
       <button class="cam-x" id="camClose" aria-label="Close">✕</button>
       <span class="cam-q" id="camQuality"></span>
       <span class="cam-time" id="camTime" hidden>0:00</span>
+      <button class="cam-script" id="tpOpen">📜 Script</button>
+    </div>
+    <!-- Teleprompter: top half of the screen, close to the front camera so your eyes stay near the lens -->
+    <div class="tp" id="tp" hidden>
+      <div class="tp-scroll" id="tpScroll"><div class="tp-text" id="tpText"></div></div>
+      <div class="tp-line" aria-hidden="true"></div>
+      <div class="tp-bar">
+        <button id="tpRestart" aria-label="Back to start">⏮</button>
+        <button id="tpPlay" aria-label="Play or pause">▶</button>
+        <button id="tpSlower" aria-label="Slower">🐢</button><span id="tpSpeed">3</span><button id="tpFaster" aria-label="Faster">🐇</button>
+        <button id="tpSmaller" aria-label="Smaller text">A−</button><button id="tpBigger" aria-label="Bigger text">A+</button>
+        <button id="tpHide" aria-label="Hide teleprompter">✕</button>
+      </div>
+    </div>
+    <div class="tp-edit" id="tpEdit" hidden>
+      <div class="tp-edit-card">
+        <h3>Your script</h3>
+        <p class="note">Paste or type what you want to say. It scrolls at the top of the screen while you record.</p>
+        <textarea id="tpInput" rows="10" placeholder="Paste your script here…"></textarea>
+        <div class="tp-edit-row">
+          <button class="btn btn-ghost" id="tpClear">Clear</button>
+          <button class="btn btn-primary" id="tpSave">Use this script</button>
+        </div>
+      </div>
     </div>
     <div class="cam-mic" id="camMic" hidden></div>
     <div class="cam-bottom">
@@ -212,6 +236,6 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=32"></script>
+  <script type="module" src="/static/js/app.js?v=33"></script>
 </body>
 </html>
