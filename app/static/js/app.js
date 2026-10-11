@@ -142,7 +142,7 @@ async function waitJob(job, onProgress) {
       const r = await fetch(`/api/jobs/${job.id}`);
       if (r.status === 401) { showLogin(); throw new AuthError("login"); }
       if (r.status === 404) {
-        throw new Error("The server restarted while working (this happens when the app updates). Please tap the button again.");
+        throw Object.assign(new Error("The server restarted while working (this happens when the app updates). Please tap the button again."), { restarted: true });
       }
       if (!r.ok) throw Object.assign(new Error(`Server error (${r.status})`), { transient: true });
       j = await r.json();
@@ -157,6 +157,25 @@ async function waitJob(job, onProgress) {
     if (j.status === "done") return j;
     if (j.status === "error") throw new Error(j.error || "Something went wrong.");
     await new Promise((r) => setTimeout(r, 900));
+  }
+}
+
+// Wait for a job; if the server restarts mid-way (e.g. while the app updates), wait for it to
+// come back and start the job again from where its files are, instead of failing.
+async function runJob(job, restart, onProgress) {
+  for (let attempt = 0; ; attempt++) {
+    if (job.done) return job;
+    try { return await waitJob(job, onProgress); }
+    catch (e) {
+      if (!e.restarted || attempt >= 3) throw e;
+      dlog("server restarted mid-job, resuming", { attempt });
+      busy("The server restarted — picking up where we left off…", 0);
+      for (let i = 0; i < 90; i++) { // up to ~3 minutes
+        try { if ((await fetch("/healthz", { cache: "no-store" })).ok) break; } catch {}
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      job = await restart();
+    }
   }
 }
 
@@ -452,7 +471,8 @@ async function handleVideoFile(file) {
       }
     }
     busy("Preparing your video…", 0);
-    await waitJob(res.job, (j) => busy(j.message, j.progress));
+    store("lp_project", res.project.id); // so "Continue my last video" can finish it if interrupted
+    await runJob(res.job, () => api(`/api/projects/${res.project.id}/prepare`, { method: "POST" }), (j) => busy(j.message, j.progress));
     const p = await api(`/api/projects/${res.project.id}`);
     busy(null);
     await openProject(p);
@@ -972,8 +992,8 @@ async function runAnalysis() {
   closeSheet();
   await flush();
   busy("Starting AI Edit…", 0);
-  const job = await api(`/api/projects/${p.id}/auto-edit`, { method: "POST" });
-  await waitJob(job, (j) => busy(j.message, j.progress));
+  const start = () => api(`/api/projects/${p.id}/auto-edit`, { method: "POST" });
+  await runJob(await start(), start, (j) => busy(j.message, j.progress));
   const fresh = await api(`/api/projects/${p.id}`);
   busy(null);
   await openProject(fresh);
@@ -1014,8 +1034,8 @@ async function saveVideo() {
   try {
     // One bar for the whole save: building on the server = 0-90%, download to the phone = 90-100%.
     busy("Saving your video", 0);
-    const job = await api(`/api/projects/${p.id}/render`, { method: "POST" });
-    const done = await waitJob(job, (j) => busy(j.status === "queued" ? "Waiting for the server…" : j.message, j.progress * 0.9));
+    const start = () => api(`/api/projects/${p.id}/render`, { method: "POST" });
+    const done = await runJob(await start(), start, (j) => busy(j.status === "queued" ? "Waiting for the server…" : j.message, j.progress * 0.9));
     url = done.result.url;
   } catch (e) {
     busy(null);
@@ -1155,8 +1175,8 @@ async function swapBroll(b) {
   await flush();
   try {
     busy("Finding another clip…", 0.1);
-    const job = await api(`/api/projects/${p.id}/broll/${b.id}/swap`, { method: "POST" });
-    await waitJob(job, (j) => busy(j.message, j.progress));
+    const start = () => api(`/api/projects/${p.id}/broll/${b.id}/swap`, { method: "POST" });
+    await runJob(await start(), start, (j) => busy(j.message, j.progress));
     busy(null);
     await openProject(await api(`/api/projects/${p.id}`));
     refreshSheet();
@@ -1864,8 +1884,16 @@ async function boot() {
         try {
           const p = await api(`/api/projects/${last}`);
           if (p.status === "ready") await openProject(p);
-          else { store("lp_project", null); $("btnContinue").hidden = true; toast("That video isn't available any more."); }
+          else {
+            // An upload that was interrupted (e.g. the server restarted): finish preparing it.
+            const start = () => api(`/api/projects/${last}/prepare`, { method: "POST" });
+            busy("Finishing your video…", 0);
+            await runJob(await start(), start, (j) => busy(j.message, j.progress));
+            busy(null);
+            await openProject(await api(`/api/projects/${last}`));
+          }
         } catch (e) {
+          busy(null);
           if (e instanceof AuthError) return;
           store("lp_project", null); $("btnContinue").hidden = true; toast("That video isn't available any more.");
         }

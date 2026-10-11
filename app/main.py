@@ -265,6 +265,18 @@ def filmstrip(pid: str):
     return FileResponse(f, headers={"Cache-Control": "max-age=86400"})
 
 
+@app.post("/api/projects/{pid}/prepare")
+def prepare_again(pid: str):
+    """Restart preparing an upload that was interrupted (e.g. the server restarted mid-way)."""
+    p = _project_or_404(pid)
+    if p.get("status") == "ready":
+        return {"done": True}
+    d = projects.pdir(pid)
+    if not (list(d.glob("original.*")) or list(d.glob("seg*.vid"))):
+        raise HTTPException(409, "The upload didn't finish — please upload the video again.")
+    return jobs.submit("prepare", pid, projects.prepare, pid)
+
+
 @app.post("/api/projects/{pid}/auto-edit")
 def auto_edit(pid: str):
     p = _project_or_404(pid)
