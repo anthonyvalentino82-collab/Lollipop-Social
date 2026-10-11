@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon-v2.png">
   <link rel="icon" href="/static/brand/favicon-v2.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=43">
+  <link rel="stylesheet" href="/static/css/app.css?v=44">
 </head>
 <body>
   <div class="app">
@@ -74,12 +74,15 @@
         <svg viewBox="0 0 24 24"><path d="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
         Record video
       </button>
+      <button class="ai-writer-btn hero-ai" id="btnAiWriter">
+        <span>📜</span> Record with Teleprompter
+        <small>🍭 AI script writer included</small>
+      </button>
       <label class="btn btn-ghost hero-lib">
         <input type="file" accept="video/*" id="inUpload" hidden>
         Choose from library
       </label>
       <button class="link" id="btnContinue" hidden>Continue my last video ›</button>
-      <button class="ai-writer-btn hero-ai" id="btnAiWriter"><span>🍭</span> AI Script Writer + Teleprompter</button>
       <button class="link report-link" id="btnReport2">Report a problem</button>
     </section>
 
@@ -251,6 +254,6 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=35"></script>
+  <script type="module" src="/static/js/app.js?v=36"></script>
 </body>
 </html>

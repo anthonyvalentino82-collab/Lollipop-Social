@@ -607,8 +607,10 @@ function tpRender() {
   $("tp").hidden = !show;
   $("cam").classList.toggle("has-tp", show);
   $("tpOpen").textContent = "📜 Teleprompter";
-  $("tpText").textContent = text;
+  // One continuous block of text — no blank lines between sentences or paragraphs.
+  $("tpText").textContent = text.replace(/\s*\n\s*/g, " ");
   $("tpText").style.fontSize = `${tp.size}px`;
+  $("tp").style.setProperty("--tp-size", `${tp.size}px`);
   $("tpSpeed").textContent = tp.speed;
 }
 function tpTick(now) {
@@ -717,7 +719,7 @@ $("btnAiWriter").addEventListener("click", async () => {
   await openCamera();
   if ($("cam").hidden) return;
   $("tpOpen").click();
-  if ($("aiPanel").hidden) $("aiOpen").click();
+  if (!tpScript().trim() && $("aiPanel").hidden) $("aiOpen").click(); // no script yet: offer the AI writer
 });
 
 for (const id of ["btnReport", "btnReport2"]) $(id)?.addEventListener("click", sendReport);

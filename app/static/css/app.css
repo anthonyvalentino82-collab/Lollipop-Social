@@ -652,15 +652,15 @@ body.cam-open { overflow: hidden; }
 
 /* ---------- Teleprompter (in-app camera) ---------- */
 .cam-script { margin-left: auto; height: 36px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--gold); color: #2a0a0c; font-weight: 800; font-size: 14px; }
-.tp { position: absolute; left: 10px; right: 10px; top: calc(env(safe-area-inset-top, 0px) + 60px); height: 44vh; z-index: 2;
+.tp { position: absolute; left: 8px; right: 8px; top: calc(env(safe-area-inset-top, 0px) + 4px); height: 42vh; z-index: 2;
   background: rgba(0,0,0,.6); border-radius: 18px; overflow: hidden; -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
 .tp-scroll { position: absolute; inset: 0 0 52px 0; overflow-y: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%);
-          mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%); }
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 6%, #000 80%, transparent 100%);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 6%, #000 80%, transparent 100%); }
 .tp-scroll::-webkit-scrollbar { display: none; }
-.tp-text { padding: 30% 20px 120%; color: #fff; font-weight: 800; line-height: 1.32; text-align: center; white-space: pre-wrap; word-break: break-word; font-size: 30px; }
+.tp-text { padding: 24px 20px 120%; color: #fff; font-weight: 800; line-height: 1.32; text-align: center; white-space: pre-wrap; word-break: break-word; font-size: 30px; }
 /* Reading marker: gold arrows at the edges (not a line through the words) */
-.tp-line { position: absolute; left: 0; right: 0; top: 30%; height: 0; pointer-events: none; }
+.tp-line { position: absolute; left: 0; right: 0; top: calc(24px + var(--tp-size, 30px) * 0.66); height: 0; pointer-events: none; }
 .tp-line::before, .tp-line::after { content: ""; position: absolute; top: -8px; border: 8px solid transparent; }
 .tp-line::before { left: 0; border-left: 10px solid var(--gold); }
 .tp-line::after { right: 0; border-right: 10px solid var(--gold); }
@@ -677,6 +677,9 @@ body.cam-open { overflow: hidden; }
   background: rgba(0,0,0,.35); color: #fff; font-family: inherit; font-size: 16px; font-weight: 600; line-height: 1.4; padding: 12px; resize: vertical; min-height: 40vh; }
 .tp-edit-row { display: flex; gap: 10px; }
 .tp-edit-row .btn { flex: 1; }
+/* With the teleprompter up, its box takes the very top (closest to the lens); the camera's
+   own top controls move down just under it. */
+.cam.has-tp .cam-top { top: calc(env(safe-area-inset-top, 0px) + 42vh + 8px); padding-top: 0; }
 .cam.has-tp .cam-mic { top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 130px); }
 .tp-count { margin: -4px 0 12px; color: var(--gold); font-weight: 800; font-size: 14px; }
 .cam-top { gap: 8px; }
@@ -723,3 +726,6 @@ body.cam-open { overflow: hidden; }
 .ai-hops b { font-size: 15px; }
 .ai-go + .note { margin-top: 12px; }
 .ai-go:disabled { font-size: 15px; }
+
+.hero-ai { width: 100%; max-width: 360px; margin: 12px auto 0; padding: 14px 16px 12px; font-size: 20px; }
+.hero-ai small { display: block; font-size: 13px; font-weight: 800; opacity: .95; margin-top: 2px; }
