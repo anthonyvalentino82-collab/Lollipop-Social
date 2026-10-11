@@ -1916,7 +1916,21 @@ function brollStep() {
       ? "No good B-roll moments were found in this video. That's OK — tap Next."
       : "B-roll is off. Add a Pixabay key in Render, or upload your own clips under “My clips”.")];
   }
+  // One switch for all B-roll. Off hides every clip; On brings back the ones you had kept.
+  const off = list.every((b) => b.removed);
+  const setAll = (on) => {
+    if (on) {
+      const marked = list.some((b) => b.keptBeforeOff);
+      for (const b of list) { if (!marked || b.keptBeforeOff) b.removed = false; delete b.keptBeforeOff; }
+    } else {
+      for (const b of list) { if (!b.removed) b.keptBeforeOff = true; b.removed = true; }
+    }
+    save(["broll"]); renderBroll(); refreshSheet(); preview.draw();
+  };
+  const onoff = chips("B-roll", [["on", "✅ On"], ["off", "🚫 Off — just me talking"]], off ? "off" : "on", (v) => setAll(v === "on"));
+  if (off) return [onoff, el("p", { class: "note" }, "B-roll is off — the whole video shows just you. Tap On to bring the clips back.")];
   return [
+    onoff,
     el("p", { class: "note" }, "AI picked these clips to show while you talk. Tap one to see it."),
     el("div", { class: "bgrid" }, ...list.map((b) => el("div", { class: `bclip${b.removed ? " removed" : ""}` },
       el("div", { class: "bclip-thumb", onclick: () => { preview.pause(); video.currentTime = b.start + 0.05; } },
