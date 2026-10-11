@@ -1080,7 +1080,8 @@ function showExport(blob, url) {
     el("p", { class: "note center" }, canShare
       ? "Then choose “Save Video” for Photos — or send to Messages, Instagram, TikTok, Facebook, LinkedIn or YouTube."
       : "Tap “Open video”, then Share (square with arrow) → “Save Video”."),
-    el("a", { class: "small-btn wide", href: url, target: "_blank", rel: "noopener" }, "Open video"));
+    el("a", { class: "small-btn wide", href: url, target: "_blank", rel: "noopener" }, "Open video"),
+    el("button", { class: "btn result-done", onclick: closeToStart }, "✅ All done — back to start"));
   $("result").hidden = false;
   document.body.classList.add("result-open");
   v.play().catch(() => {}); // starts right away when allowed; otherwise tap ▶
@@ -1137,6 +1138,15 @@ async function postTo(s, file, url, player) {
   }, 1000);
 }
 
+// Close the finished-video screen and go back to the start page. The video stays saved on the
+// server, so "Continue my last video" can reopen it.
+function closeToStart() {
+  const pid = state.project?.id;
+  $("resultVideo").pause();
+  if (pid) store("lp_project", pid);
+  location.href = "/";
+}
+$("resultClose").addEventListener("click", closeToStart);
 $("resultBack").addEventListener("click", () => {
   $("resultVideo").pause();
   $("result").hidden = true;
