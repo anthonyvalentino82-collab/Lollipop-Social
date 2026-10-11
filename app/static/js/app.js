@@ -257,11 +257,31 @@ function setSize(sz) {
   placeSizeHint();
   setTimeout(placeSizeHint, 260); // after the resize animation
 }
-// While editing, the video fills whatever space the edit panel leaves free.
+// While editing, the video fills exactly the space between the top of the screen and the
+// edit panel, leaving room for the play bar (measured on the real screen, so the iPhone's
+// status-bar area is accounted for).
+function fitStage() {
+  const sh = $("sheet");
+  const root = document.documentElement.style;
+  if (sh.hidden || !document.body.classList.contains("sheet-open")) { root.removeProperty("--stage-h"); sh.style.maxHeight = ""; return; }
+  const rowTop = document.querySelector(".stage-row").getBoundingClientRect().top;
+  const scrub = $("scrub");
+  const scrubH = scrub.hidden ? 0 : Math.max(48, scrub.getBoundingClientRect().height) + 14;
+  // Never let the panel grow over the play bar: keep at least a small video + the play bar.
+  sh.style.maxHeight = "";
+  const cssMax = parseFloat(getComputedStyle(sh).maxHeight) || innerHeight;
+  const minRow = Math.max(160, $("sizeNote").offsetHeight, document.querySelector(".size-side").offsetHeight);
+  const room = innerHeight - rowTop - minRow - scrubH - 12;
+  if (room < cssMax) sh.style.maxHeight = `${Math.max(240, room)}px`;
+  const sheetTop = sh.getBoundingClientRect().top;
+  root.setProperty("--stage-h", `${Math.max(140, Math.floor(sheetTop - rowTop - scrubH - 8))}px`);
+}
 new ResizeObserver(() => {
   const sh = $("sheet");
   document.documentElement.style.setProperty("--sheet-h", `${sh.hidden ? 0 : Math.round(sh.getBoundingClientRect().height)}px`);
+  fitStage();
 }).observe($("sheet"));
+window.addEventListener("resize", fitStage);
 // "Make video bigger / smaller" buttons beside the video.
 function stepSize(d) {
   const k = Math.max(0, Math.min(SIZES.length - 1, SIZES.indexOf(state.size || "m") + d));
@@ -1225,6 +1245,7 @@ function closeSheet() {
   placeSizeHint();
   state.sheet = null;
   state.wizard = null;
+  fitStage();
   preview.ghostCaptions = false;
   preview.draw();
   markTools();
@@ -1256,12 +1277,14 @@ function renderSheet({ key, title, step, content, footer }) {
   document.body.classList.add("sheet-open");
   $("sheet").hidden = false; // no backdrop: the preview stays draggable while a panel is open
   [60, 300, 700].forEach((ms) => setTimeout(placeSizeHint, ms));
+  requestAnimationFrame(fitStage);
   preview.draw();
 }
 
 function openSheet(tool, title, content) {
   if (!state.project && tool !== "clips" && tool !== "error") return;
   state.wizard = null;
+  state.sheet = tool; // so the builders know which panel they're in
   renderSheet({ key: tool, title: title || TITLES[tool], content: content || BUILDERS[tool]() });
 }
 
@@ -1327,10 +1350,16 @@ function slider(label, { min, max, step = 1, value, fmt: f = (v) => v, oninput }
   return el("div", { class: "field" }, el("div", { class: "row" }, el("label", { class: "label" }, label), out), inp);
 }
 // Advanced settings stay tucked away so each step shows just a few big choices.
+const MORE_HINTS = {
+  trim: "fine-tune, cut out the middle", captions: "size, font, fix a word", headline: "colors, size, fonts",
+  logo: "size, see-through, save default", music: "auto-lower, voice cleanup",
+};
 function more(open, ...kids) {
-  const d = el("details", { class: "more" }, el("summary", {}, "More options"), ...kids.flat().filter(Boolean));
+  const hint = MORE_HINTS[state.wizard != null ? STEPS[state.wizard]?.key : state.sheet];
+  const d = el("details", { class: "more" },
+    el("summary", {}, "More options", hint ? el("small", {}, ` (${hint})`) : null), ...kids.flat().filter(Boolean));
   if (open) d.open = true;
-  d.addEventListener("toggle", () => store("lp_more_" + (state.sheet || ""), d.open ? "1" : null));
+  d.addEventListener("toggle", () => { store("lp_more_" + (state.sheet || ""), d.open ? "1" : null); requestAnimationFrame(fitStage); });
   return d;
 }
 function chips(label, options, current, onpick) {
