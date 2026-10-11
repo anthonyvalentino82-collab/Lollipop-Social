@@ -452,7 +452,9 @@ $("inRecord").addEventListener("change", (e) => { handleVideoFile(e.target.files
 const cam = { stream: null, rec: null, chunks: [], facing: "user", timer: null, t0: 0 };
 const camSupported = () => !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
 function camMime() {
-  for (const t of ["video/mp4;codecs=avc1.640028,mp4a.40.2", "video/mp4;codecs=avc1", "video/mp4",
+  // Let Safari pick its own H.264 settings: forcing a codec profile gave recordings whose picture
+  // stopped partway through on iPhone.
+  for (const t of ["video/mp4", "video/mp4;codecs=avc1",
                    "video/webm;codecs=h264,opus", "video/webm;codecs=vp9,opus", "video/webm"]) {
     if (MediaRecorder.isTypeSupported?.(t)) return t;
   }
@@ -603,7 +605,7 @@ function camStartRec() {
   if (!cam.stream || cam.rec) return;
   const mimeType = camMime();
   cam.chunks = [];
-  const rec = new MediaRecorder(cam.stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 192_000 });
+  const rec = new MediaRecorder(cam.stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 5_000_000, audioBitsPerSecond: 160_000 });
   cam.rec = rec;
   // Watchdog: warn right away if the camera stops sending pictures while recording.
   const vtrack = cam.stream.getVideoTracks()[0];
@@ -688,8 +690,35 @@ function camReview(file) {
   const v = $("camReviewVid");
   v.src = cam.reviewUrl;
   $("camReviewTitle").textContent = `Take ${cam.take} · ${fmt(camElapsed())}`;
+  $("camReviewWarn").hidden = true;
   $("camReview").hidden = false;
-  v.play().catch(() => {});
+  cam.reviewBroken = false;
+  checkTakePicture(v).then((end) => {
+    if (end != null) {
+      cam.reviewBroken = true;
+      $("camReviewWarn").hidden = false;
+      $("camReviewWarn").textContent = `⚠️ Your iPhone stopped recording the picture at ${fmt(end)} (the sound kept going). Please tap Retake.`;
+      dlog("take picture stopped early", { at: end, length: v.duration });
+    }
+    v.currentTime = 0;
+    v.play().catch(() => {});
+  });
+}
+// Jump to the end of the take and see which frame shows: if the last picture is from much
+// earlier, the phone stopped recording video partway through. Returns that time, or null if fine.
+async function checkTakePicture(v) {
+  try {
+    if (!v.requestVideoFrameCallback) return null;
+    if (!(v.readyState >= 1)) await new Promise((r) => v.addEventListener("loadedmetadata", r, { once: true }));
+    if (!isFinite(v.duration) || v.duration < 4) return null;
+    const shown = new Promise((res) => {
+      const to = setTimeout(() => res(null), 3000);
+      v.requestVideoFrameCallback((now, meta) => { clearTimeout(to); res(meta.mediaTime); });
+    });
+    v.currentTime = Math.max(0, v.duration - 0.3);
+    const last = await shown;
+    return last != null && last < v.duration - 2 ? last : null;
+  } catch { return null; }
 }
 function camReviewClose() {
   const v = $("camReviewVid");
@@ -713,6 +742,7 @@ $("camRetake").addEventListener("click", async () => {
 });
 $("camUse").addEventListener("click", () => {
   const file = cam.reviewFile; if (!file) return;
+  if (cam.reviewBroken && !confirm("The picture in this take stops partway through. Use it anyway?")) return;
   dlog("take used", { take: cam.take });
   cam.reviewFile = null; // keep it from being freed before upload
   camReviewClose();

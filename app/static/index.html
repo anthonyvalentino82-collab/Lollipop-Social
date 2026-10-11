@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon-v2.png">
   <link rel="icon" href="/static/brand/favicon-v2.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=55">
+  <link rel="stylesheet" href="/static/css/app.css?v=56">
 </head>
 <body>
   <div class="app">
@@ -255,6 +255,7 @@
     <!-- After a take: watch it back, then keep it or redo it. Nothing uploads until "Use this take". -->
     <div class="cam-review" id="camReview" hidden>
       <div class="cam-review-head"><span id="camReviewTitle">Take 1</span><span class="note">Watch it back — nothing is processed until you choose</span></div>
+      <div class="cam-review-warn" id="camReviewWarn" hidden></div>
       <video id="camReviewVid" playsinline controls></video>
       <div class="cam-review-btns">
         <button class="hbtn hbtn-rec rv-btn" id="camRetake"><span class="hbtn-ico">🔁</span><span class="hbtn-txt">Retake<small>Delete this take, start over</small></span></button>
@@ -271,6 +272,6 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=42"></script>
+  <script type="module" src="/static/js/app.js?v=43"></script>
 </body>
 </html>

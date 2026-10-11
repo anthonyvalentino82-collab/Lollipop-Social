@@ -194,15 +194,21 @@ def prepare(pid: str, progress) -> dict:
     source_warnings = []
     progress(0.97, "Checking the recording")
     froze = media.frozen_at(d / "source.mp4", info2["duration"])
+    # The phone's recorder can stop writing video frames while the sound keeps going: then the
+    # video track simply ends early (the last frame just stays on screen).
+    from .debug import timing_facts
+    original_timing = timing_facts(original)
+    if isinstance(original_timing, dict) and original_timing.get("frames"):
+        last = original_timing["last"]
+        if info2["duration"] - last >= 2 and (froze is None or last < froze):
+            froze = last
     if froze is not None:
         m, sec = divmod(int(froze), 60)
         source_warnings.append(f"Heads up: the picture in this recording stops moving at {m}:{sec:02d} "
                                "(the camera stopped sending video, but the sound kept going). "
-                               "Trim it there, or re-record — the iPhone Camera app + “Choose from library” is the most reliable.")
+                               "Trim it there, or re-record — if it keeps happening, record with the iPhone Camera app and use “Choose from library”.")
     from .debug import media_facts
     original_facts = media_facts(original)  # codec/fps/duration only, for "Report a problem"
-    from .debug import timing_facts
-    original_timing = timing_facts(original)
     original.unlink(missing_ok=True)  # save disk space; the working copy is all we need
     with _lock:
         p = load(pid)

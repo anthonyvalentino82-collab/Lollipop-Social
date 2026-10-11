@@ -829,3 +829,6 @@ body.cam-open { overflow: hidden; }
 .cam-count.pop { animation: camPop 1s ease-out; }
 @keyframes camPop { 0% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; } 25% { opacity: 1; } 100% { transform: translate(-50%, -50%) scale(.9); opacity: .85; } }
 .cam-rec.counting { border-color: var(--gold); }
+
+.cam-review-warn { background: rgba(227,32,42,.92); color: #fff; font-weight: 800; font-size: 15px; padding: 10px 12px; border-radius: 12px; text-align: center; }
+.cam-review-warn[hidden] { display: none; }
