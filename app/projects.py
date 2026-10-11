@@ -187,7 +187,9 @@ def prepare(pid: str, progress) -> dict:
         progress(0.03, "Joining your recording")
         import json as _json
         offsets = _json.loads((d / "segments.json").read_text())
-        starts = media.stitch_segments(segs, offsets, d / "original.mp4")
+        # Joined straight into the working format: no second full-HD encode afterwards.
+        starts = media.stitch_segments(segs, offsets, d / "original.mp4", media.normalize_vf(media.probe(segs[0])),
+                                       lambda f: progress(0.03 + 0.85 * f, f"Joining your recording… {int(f * 100)}%"))
         for f in segs:
             f.unlink(missing_ok=True)
         with _lock:
@@ -200,9 +202,12 @@ def prepare(pid: str, progress) -> dict:
     info = media.probe(original)
     if info["duration"] > 600:
         raise RuntimeError("Please use a video shorter than 10 minutes.")
-    progress(0.15, "Optimizing video")
-    media.normalize(original, d / "source.mp4", info,
-                    lambda f: progress(0.15 + 0.8 * f, f"Optimizing video… {int(f * 100)}%"))
+    if segs:  # already in the working format (see above)
+        shutil.copyfile(original, d / "source.mp4")
+    else:
+        progress(0.15, "Optimizing video")
+        media.normalize(original, d / "source.mp4", info,
+                        lambda f: progress(0.15 + 0.8 * f, f"Optimizing video… {int(f * 100)}%"))
     info2 = media.probe(d / "source.mp4")
     media.thumbnail(d / "source.mp4", d / "thumb.jpg", t=min(1.0, info2["duration"] / 2))
     media.filmstrip(d / "source.mp4", d / "filmstrip2.jpg", info2["duration"])

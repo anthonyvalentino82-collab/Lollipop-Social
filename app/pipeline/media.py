@@ -76,9 +76,9 @@ def has_filter(name: str) -> bool:
         return False
 
 
-def normalize(src: Path, dst: Path, info: dict, on_progress=lambda f: None) -> None:
-    """Convert any phone video (HEVC, HDR, rotated, 4K, 60fps) into an H.264
-    30fps working copy whose short side is at most 1080px."""
+def normalize_vf(info: dict) -> list[str]:
+    """Video filters that turn a phone video into the working format (30fps, short side ≤1080,
+    HDR tone-mapped to SDR, yuv420p)."""
     if info["width"] <= info["height"]:
         scale = "scale='min(1080,iw)':-2"
     else:
@@ -90,6 +90,13 @@ def normalize(src: Path, dst: Path, info: dict, on_progress=lambda f: None) -> N
         vf += ["zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
                "tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv"]
     vf.append("format=yuv420p")
+    return vf
+
+
+def normalize(src: Path, dst: Path, info: dict, on_progress=lambda f: None) -> None:
+    """Convert any phone video (HEVC, HDR, rotated, 4K, 60fps) into an H.264
+    30fps working copy whose short side is at most 1080px."""
+    vf = normalize_vf(info)
     cmd = ["ffmpeg", "-y", "-threads", config.FFMPEG_THREADS, "-i", str(src), "-vf", ",".join(vf),
            "-c:v", "libx264", "-preset", "veryfast", "-crf", "15", "-threads", config.FFMPEG_THREADS,
            "-movflags", "+faststart"]
@@ -100,7 +107,8 @@ def normalize(src: Path, dst: Path, info: dict, on_progress=lambda f: None) -> N
                 "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2"]
     else:
         # Add a silent track so the rest of the pipeline can assume audio exists.
-        cmd = cmd[:3] + ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"] + cmd[3:] + [
+        k = cmd.index(str(src)) + 1  # right after the video input
+        cmd = cmd[:k] + ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"] + cmd[k:] + [
             "-map", "0:v", "-map", "1:a", "-c:a", "aac", "-shortest"]
     cmd.append(str(dst))
     run_with_progress(cmd, info.get("duration", 0), on_progress)
@@ -182,7 +190,8 @@ def _align(prev: "np.ndarray", cur: "np.ndarray", expected: float, rate: int = 8
     return (lo + k) / rate
 
 
-def stitch_segments(segs: list[Path], offsets: list[float], dst: Path) -> list[float]:
+def stitch_segments(segs: list[Path], offsets: list[float], dst: Path, vf: list[str] | None = None,
+                    on_progress=lambda f: None) -> list[float]:
     """Join overlapping recording pieces (the phone restarts its recorder every few seconds)
     into one video. Each piece's real start is found by matching the overlapping sound, then the
     pieces are cut in the middle of each overlap and joined. Returns the starts used."""
@@ -213,10 +222,12 @@ def stitch_segments(segs: list[Path], offsets: list[float], dst: Path) -> list[f
         names = []
         for i, (s, (a, b)) in enumerate(zip(segs, windows)):
             part = tmp / f"v{i}.mp4"
+            # `vf` = the working-copy filters, so the joined file IS the working copy (one encode, not two).
             run(["ffmpeg", "-y", "-threads", config.FFMPEG_THREADS, "-ss", f"{a:.3f}", "-i", str(s), "-t", f"{b - a:.3f}",
-                 "-map", "0:v:0", "-an", "-vf", "fps=30,format=yuv420p", "-c:v", "libx264", "-preset", "veryfast",
-                 "-crf", "16", "-threads", config.FFMPEG_THREADS, str(part)])
+                 "-map", "0:v:0", "-an", "-vf", ",".join(vf or ["fps=30", "format=yuv420p"]), "-c:v", "libx264",
+                 "-preset", "veryfast", "-crf", "15", "-threads", config.FFMPEG_THREADS, "-movflags", "+faststart", str(part)])
             names.append(part)
+            on_progress((i + 1) / (len(segs) + 1))
         # Sound: cut and joined in one pass (audio is tiny; the video streams aren't decoded).
         ainputs, aparts = [], []
         for i, (s, (a, b)) in enumerate(zip(segs, windows)):
@@ -224,7 +235,7 @@ def stitch_segments(segs: list[Path], offsets: list[float], dst: Path) -> list[f
             aparts.append(f"[{i}:a]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS,aresample=48000[a{i}]")
         graph = ";".join(aparts) + ";" + "".join(f"[a{i}]" for i in range(len(segs))) + f"concat=n={len(segs)}:v=0:a=1[a]"
         run(["ffmpeg", "-y", *ainputs, "-filter_complex", graph, "-map", "[a]", "-vn",
-             "-c:a", "aac", "-b:a", "192k", str(tmp / "a.m4a")])
+             "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", str(tmp / "a.m4a")])
         (tmp / "list.txt").write_text("".join(f"file '{n.name}'\n" for n in names))
         run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(tmp / "list.txt"), "-i", str(tmp / "a.m4a"),
              "-map", "0:v:0", "-map", "1:a:0", "-c", "copy", "-shortest", "-movflags", "+faststart", str(dst)])

@@ -19,4 +19,6 @@ COPY app ./app
 
 ENV DATA_DIR=/data PYTHONUNBUFFERED=1 PORT=8000
 EXPOSE 8000
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+# Exactly one web process: jobs run one at a time from it. (Render may set WEB_CONCURRENCY on
+# bigger plans, which would start several copies that don't know each other's jobs.)
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers 1"]
