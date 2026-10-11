@@ -18,6 +18,11 @@ for d in (PROJECTS_DIR, LOGOS_DIR, CLIPS_DIR, USER_FONTS_DIR):
 # Optional password protecting the whole app (strongly recommended once online).
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 
+# Private key that lets Claude read "Report a problem" reports and recordings (debug only).
+DEBUG_KEY = os.environ.get("DEBUG_KEY", "")
+REPORTS_DIR = DATA_DIR / "reports"
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
 # Transcription: "openai" (whisper-1, paid, fast) or "local" (faster-whisper, free, slower).
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 TRANSCRIBE_PROVIDER = os.environ.get("TRANSCRIBE_PROVIDER", "openai" if OPENAI_API_KEY else "local")

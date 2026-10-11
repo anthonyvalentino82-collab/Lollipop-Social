@@ -69,6 +69,36 @@ function toast(msg, ms = 2600) {
   const t = $("toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), ms);
 }
+// ---------- "Report a problem": a short technical log of what the app did ----------
+const dlogBuf = (() => { try { return JSON.parse(localStorage.getItem("lp_dlog") || "[]"); } catch { return []; } })();
+function dlog(msg, data) {
+  dlogBuf.push({ t: new Date().toISOString(), msg: String(msg).slice(0, 300), ...(data ? { data } : {}) });
+  while (dlogBuf.length > 150) dlogBuf.shift();
+  try { localStorage.setItem("lp_dlog", JSON.stringify(dlogBuf)); } catch {}
+}
+window.addEventListener("error", (e) => dlog("js error", { message: e.message, at: `${e.filename}:${e.lineno}` }));
+window.addEventListener("unhandledrejection", (e) => dlog("js promise error", { message: String(e.reason?.message || e.reason) }));
+document.addEventListener("visibilitychange", () => dlog(`page ${document.visibilityState}`));
+async function sendReport() {
+  const note = prompt("What went wrong? (a few words help — optional)");
+  if (note === null) return;
+  const conn = navigator.connection || {};
+  const client = {
+    userAgent: navigator.userAgent, platform: navigator.platform, standalone: !!navigator.standalone,
+    screen: `${screen.width}x${screen.height}@${devicePixelRatio}`, viewport: `${innerWidth}x${innerHeight}`,
+    memoryGB: navigator.deviceMemory, cores: navigator.hardwareConcurrency, network: conn.effectiveType,
+    appVersion: document.querySelector('script[src*="app.js"]')?.getAttribute("src"),
+    screenShown: ["hero", "stageWrap", "result"].filter((id) => $(id) && !$(id).hidden),
+    log: dlogBuf.slice(-150),
+  };
+  try {
+    busy("Sending report…", 0.5);
+    const r = await api("/api/report", { method: "POST", json: { note, projectId: state.project?.id || recall("lp_project"), client } });
+    busy(null);
+    alert(`Report sent ✓\n\nTell Claude: “I sent a report” (number ${r.id}).`);
+  } catch (e) { busy(null); if (!(e instanceof AuthError)) toast("Couldn't send the report: " + e.message, 5000); }
+}
+
 function store(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
 function recall(k) { try { return localStorage.getItem(k); } catch { return null; } }
 
@@ -131,6 +161,7 @@ async function waitJob(job, onProgress) {
 }
 
 function showError(title, err, retry) {
+  dlog(`error shown: ${title}`, { message: String(err && err.message || err) });
   openSheet("error", title, [
     el("p", { class: "note warn" }, String(err && err.message || err)),
     el("p", { class: "note" }, "If this keeps happening, take a screenshot of this message and send it to Claude."),
@@ -334,6 +365,7 @@ async function openProject(p) {
   $("btnAutoSub").textContent = p.autoEdited ? "Walk through your edits again" : "Tap for ✨ AI Edit";
   $("btnSave").hidden = !p.autoEdited;
   $("btnFine").hidden = !p.autoEdited;
+  $("btnReport").hidden = false;
   renderBroll();
   renderWarnings();
   markTools();
@@ -367,7 +399,7 @@ function resetToEmpty() {
   store("lp_project", null);
   $("hero").hidden = false;
   $("stageWrap").hidden = true;
-  ["scrub", "hint", "brollStrip", "warnings", "btnNew", "btnSave", "btnFine", "fineTune"].forEach((id) => ($(id).hidden = true));
+  ["scrub", "hint", "brollStrip", "warnings", "btnNew", "btnSave", "btnFine", "fineTune", "btnReport"].forEach((id) => ($(id).hidden = true));
   setSize("m");
   document.querySelectorAll(".tools button").forEach((b) => (b.disabled = true));
   $("btnAuto").disabled = true;
@@ -384,6 +416,7 @@ function resetToEmpty() {
 
 async function handleVideoFile(file) {
   if (!file) return;
+  dlog("video chosen", { name: file.name, type: file.type, sizeMB: +(file.size / 2 ** 20).toFixed(1) });
   try {
     busy("Uploading… 0%", 0);
     const res = await upload("/api/projects", { file }, (f) => busy(`Uploading… ${Math.round(f * 100)}%`, f));
@@ -395,6 +428,7 @@ async function handleVideoFile(file) {
     toast("Video ready! Tap ✨ AI Edit");
   } catch (e) {
     busy(null);
+    dlog("upload failed", { message: e.message });
     if (!(e instanceof AuthError)) toast(e.message, 5000);
   }
 }
@@ -476,6 +510,8 @@ async function camStart() {
   $("camMic").hidden = false;
   $("camMic").classList.toggle("warn", !phoneMic);
   $("camMic").textContent = phoneMic ? "🎙 iPhone mic" : `⚠️ Using “${micLabel}” mic — for clear sound, disconnect Bluetooth / CarPlay`;
+  dlog("camera opened", { facing: cam.facing, settings: st, mic: micLabel,
+    mics: (await navigator.mediaDevices.enumerateDevices().catch(() => [])).filter((d) => d.kind === "audioinput").map((d) => d.label) });
   const short = Math.min(w || 0, h || 0);
   $("camQuality").textContent = short ? `${short >= 1080 ? "HD 1080p" : short + "p"} · ${Math.round(st.frameRate || 30)} fps` : "";
 }
@@ -526,24 +562,28 @@ $("camRec").addEventListener("click", () => {
   let lastFrameAt = performance.now();
   const onFrame = () => { lastFrameAt = performance.now(); if (cam.rec === rec && view.requestVideoFrameCallback) view.requestVideoFrameCallback(onFrame); };
   if (view.requestVideoFrameCallback) view.requestVideoFrameCallback(onFrame);
-  const stalled = () => { $("camMic").hidden = false; $("camMic").classList.add("warn");
+  const stalled = (why) => { if (!cam.stallLogged) { cam.stallLogged = true; dlog("camera stalled", { why: why?.type || why, at: (Date.now() - cam.t0) / 1000 }); } $("camMic").hidden = false; $("camMic").classList.add("warn");
     $("camMic").textContent = "⚠️ The camera stopped sending video. Tap stop and record again."; };
   vtrack.addEventListener("ended", stalled, { once: true });
   vtrack.addEventListener("mute", stalled, { once: true });
   cam.watch = setInterval(() => {
     if (cam.rec !== rec) { clearInterval(cam.watch); return; }
-    if (view.requestVideoFrameCallback && performance.now() - lastFrameAt > 2500) stalled();
+    if (view.requestVideoFrameCallback && performance.now() - lastFrameAt > 2500) stalled("no frames");
   }, 1000);
   rec.ondataavailable = (e) => { if (e.data && e.data.size) cam.chunks.push(e.data); };
   rec.onstop = () => {
     const type = rec.mimeType || mimeType || "video/mp4";
     const blob = new Blob(cam.chunks, { type });
+    dlog("recording stopped", { seconds: (Date.now() - cam.t0) / 1000, sizeMB: +(blob.size / 2 ** 20).toFixed(1), type, chunks: cam.chunks.length });
     cam.rec = null;
     closeCamera();
     if (!blob.size) { toast("Nothing was recorded — please try again."); return; }
     const file = new File([blob], `recording.${type.includes("webm") ? "webm" : "mp4"}`, { type });
     handleVideoFile(file); // straight into upload + AI Edit, no camera roll
   };
+  rec.onerror = (e) => dlog("recorder error", { message: String(e.error?.message || e.error || e) });
+  cam.stallLogged = false;
+  dlog("recording started", { mimeType: rec.mimeType || mimeType });
   rec.start(); // one continuous recording (1-second slices can drop audio on iPhone)
   cam.t0 = Date.now();
   $("camRec").classList.add("on");
@@ -551,6 +591,7 @@ $("camRec").addEventListener("click", () => {
   $("camTime").textContent = "0:00";
   cam.timer = setInterval(() => { $("camTime").textContent = fmt((Date.now() - cam.t0) / 1000); }, 250);
 });
+for (const id of ["btnReport", "btnReport2"]) $(id)?.addEventListener("click", sendReport);
 $("inUpload").addEventListener("change", (e) => { handleVideoFile(e.target.files[0]); e.target.value = ""; });
 $("btnNew").addEventListener("click", () => { if (confirm("Start a new video? (This one stays saved on the server for 14 days.)")) resetToEmpty(); });
 

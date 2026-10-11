@@ -13,7 +13,7 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFil
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config, jobs, projects
+from . import config, debug, jobs, projects
 
 app = FastAPI(title="LolliPOP Social")
 projects.cleanup_old()
@@ -29,7 +29,7 @@ def _token() -> str:
 async def require_password(request: Request, call_next):
     path = request.url.path
     public = path == "/" or path.startswith("/static/") or path in (
-        "/api/login", "/manifest.webmanifest", "/healthz") or path.startswith("/icons/")
+        "/api/login", "/manifest.webmanifest", "/healthz") or path.startswith(("/icons/", "/api/debug/"))
     if config.APP_PASSWORD and not public:
         if not hmac.compare_digest(request.cookies.get(AUTH_COOKIE, ""), _token()):
             return JSONResponse({"detail": "login required"}, status_code=401)
@@ -287,6 +287,41 @@ def get_job(job_id: str):
     if not job:
         raise HTTPException(404, "Job not found (the server may have restarted).")
     return job
+
+
+# ---------- "Report a problem" (technical details only) ----------
+
+@app.post("/api/report")
+def send_report(payload: dict = Body(...)):
+    return {"ok": True, "id": debug.save_report(payload)}
+
+
+def _debug_auth(request: Request) -> None:
+    """Reading reports needs the private DEBUG_KEY (header X-Debug-Key)."""
+    key = request.headers.get("x-debug-key", "")
+    if not config.DEBUG_KEY or not hmac.compare_digest(key, config.DEBUG_KEY):
+        raise HTTPException(404, "Not found")
+
+
+@app.get("/api/debug/reports")
+def debug_reports(request: Request):
+    _debug_auth(request)
+    return debug.list_reports()
+
+
+@app.get("/api/debug/reports/{rid}")
+def debug_report(rid: str, request: Request):
+    _debug_auth(request)
+    f = config.REPORTS_DIR / f"{Path(rid).name}.json"
+    if not f.is_file():
+        raise HTTPException(404, "Report not found")
+    return FileResponse(f, media_type="application/json")
+
+
+@app.get("/api/debug/server")
+def debug_server(request: Request):
+    _debug_auth(request)
+    return {**debug.server_info(), "jobs": list(jobs.history)}
 
 
 # ---------- files ----------

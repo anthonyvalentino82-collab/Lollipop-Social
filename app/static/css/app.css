@@ -646,3 +646,6 @@ body.cam-open { overflow: hidden; }
 .cam-mic { position: absolute; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top, 0px) + 62px);
   max-width: calc(100% - 32px); text-align: center; font-size: 12px; font-weight: 700; color: #fff; background: rgba(0,0,0,.45); padding: 5px 11px; border-radius: 999px; }
 .cam-mic.warn { background: rgba(227,32,42,.9); font-size: 13px; padding: 8px 12px; border-radius: 12px; }
+
+/* "Report a problem" — quiet text link */
+.link.report-link { display: block; margin: 18px auto 4px; color: rgba(255,255,255,.45); font-size: 13px; font-weight: 600; text-decoration: underline; }

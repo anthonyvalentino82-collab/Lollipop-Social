@@ -16,6 +16,8 @@ services:
         sync: false
       - key: PIXABAY_API_KEY
         sync: false
+      - key: DEBUG_KEY        # private key so Claude can read "Report a problem" reports
+        sync: false
       - key: PEXELS_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY

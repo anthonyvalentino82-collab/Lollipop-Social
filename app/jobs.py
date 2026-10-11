@@ -12,13 +12,16 @@ import os
 import queue
 import threading
 import traceback
+import time
 import uuid
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
 _pool = ThreadPoolExecutor(max_workers=1)
 _jobs: dict[str, dict] = {}
 _lock = threading.Lock()
-_ctx = mp.get_context("spawn")  # fresh interpreter: safe with MediaPipe/OpenCV threads
+_ctx = mp.get_context("spawn")
+history: deque = deque(maxlen=40)  # recent finished jobs, for "Report a problem"  # fresh interpreter: safe with MediaPipe/OpenCV threads
 
 
 def _child(fn, args, q):
@@ -32,7 +35,7 @@ def _child(fn, args, q):
         q.put(("done", result, None))
     except Exception as exc:
         traceback.print_exc()
-        q.put(("error", str(exc), None))
+        q.put(("error", str(exc), traceback.format_exc()[-4000:]))
 
 
 def submit(kind: str, project_id: str, fn, *args) -> dict:
@@ -44,6 +47,7 @@ def submit(kind: str, project_id: str, fn, *args) -> dict:
     def runner():
         job["status"] = "running"
         job["message"] = "Starting…"
+        t0 = time.time()
         q = _ctx.Queue()
         proc = _ctx.Process(target=_child, args=(fn, args, q), daemon=True)
         proc.start()
@@ -73,9 +77,12 @@ def submit(kind: str, project_id: str, fn, *args) -> dict:
                 job["progress"], job["status"], job["message"] = 1.0, "done", "Done"
                 finished = True
             elif kind_ == "error":
-                job["status"], job["error"] = "error", a
+                job["status"], job["error"], job["trace"] = "error", a, b
                 finished = True
         proc.join(timeout=10)
+        history.append({"id": job["id"], "kind": job["kind"], "project": job["project"],
+                        "status": job["status"], "error": job["error"], "trace": job.get("trace"),
+                        "started": t0, "seconds": round(time.time() - t0, 1), "exitcode": proc.exitcode})
 
     _pool.submit(runner)
     return job

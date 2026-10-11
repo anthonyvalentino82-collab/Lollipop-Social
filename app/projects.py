@@ -199,6 +199,8 @@ def prepare(pid: str, progress) -> dict:
         source_warnings.append(f"Heads up: the picture in this recording stops moving at {m}:{sec:02d} "
                                "(the camera stopped sending video, but the sound kept going). "
                                "Trim it there, or re-record — the iPhone Camera app + “Choose from library” is the most reliable.")
+    from .debug import media_facts
+    original_facts = media_facts(original)  # codec/fps/duration only, for "Report a problem"
     original.unlink(missing_ok=True)  # save disk space; the working copy is all we need
     with _lock:
         p = load(pid)
@@ -206,6 +208,7 @@ def prepare(pid: str, progress) -> dict:
         p["trim"] = {"start": 0, "end": round(info2["duration"], 3)}
         p["status"] = "ready"
         p["sourceWarnings"] = source_warnings
+        p["originalFacts"] = original_facts
         save(p)
     return {"ok": True}
 
