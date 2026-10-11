@@ -193,6 +193,10 @@ video footage background view modern""".split())
 # Never show these unless the search itself asks for them.
 OFF_TOPIC = set("""animal animals bird birds duck ducks dog dogs cat cats wildlife insect insects fish horse horses cow
 cows chicken chickens butterfly bee bees pet pets zoo jungle safari""".split())
+# Not real footage (drawn, 3D, AI-made) — looks fake next to a real person talking.
+FAKE = set("""animation animated cartoon illustration illustrated render rendering rendered 3d cgi anime drawing
+painting painted fantasy fairytale magic magical surreal generated artificial wallpaper lofi loop seamless
+abstract particles neon hologram""".split())
 
 
 def _words(text: str) -> set[str]:
@@ -205,8 +209,11 @@ def relevant(query: str, tags: str) -> bool:
     q, t = _words(query), _words(tags)
     if (t & _words(" ".join(OFF_TOPIC))) and not (q & _words(" ".join(OFF_TOPIC))):
         return False
+    if t & _words(" ".join(FAKE)):
+        return False
     key = q - _words(" ".join(GENERIC)) - _words(" ".join(STOP))
-    return not key or bool(key & t)
+    # "suburban home" must match both words, not just "home" (a cartoon winter room is a "home" too).
+    return not key or len(key & t) >= min(2, len(key))
 
 
 def search_stock(query: str, exclude: set[str] = frozenset(), alts: list[str] = (),
@@ -217,7 +224,9 @@ def search_stock(query: str, exclude: set[str] = frozenset(), alts: list[str] = 
     don't always give the same clip. Returns {id, url, link, credit} or None."""
     for allow_old in (False, True):
         skip = set(exclude) | (set() if allow_old else set(avoid))
-        for q in [query, *alts]:
+        # Before ever re-using a clip from an earlier video, try a few general on-topic searches.
+        extra = [] if allow_old else random.sample(NICHE_QUERIES, min(4, len(NICHE_QUERIES)))
+        for q in [query, *alts, *extra]:
             for search in (_search_pexels, _search_pixabay):
                 try:
                     cands = search(q, skip)

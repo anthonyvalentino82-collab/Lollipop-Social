@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon-v6.png">
   <link rel="icon" href="/static/brand/favicon-v6.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=76">
+  <link rel="stylesheet" href="/static/css/app.css?v=77">
 </head>
 <body>
   <div class="app">
@@ -198,7 +198,11 @@
       <button class="link" id="resultBack">‹ Back to editing</button>
       <button class="result-close" id="resultClose" aria-label="Close">✕ Close</button>
     </div>
-    <div class="result-video"><video id="resultVideo" playsinline controls></video></div>
+    <div class="result-video"><div class="rv-box" id="rvBox">
+      <video id="resultVideo" playsinline preload="auto"></video>
+      <button class="rv-play" id="rvPlay" aria-label="Play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+      <div class="rv-bar"><i id="rvProg"></i></div>
+    </div></div>
     <div class="result-actions" id="resultActions"></div>
   </div>
 
@@ -285,6 +289,6 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=61"></script>
+  <script type="module" src="/static/js/app.js?v=62"></script>
 </body>
 </html>

@@ -351,6 +351,15 @@ $("sizeBtnMain").addEventListener("click", cycleSize);
 $("exitFull").addEventListener("click", () => setSize("m"));
 setSize("m");
 
+// ---------- finished video: tap to play (no buttons over it), tap again to pause ----------
+{
+  const v = $("resultVideo");
+  const sync = () => { $("rvBox").classList.toggle("playing", !v.paused); };
+  $("rvBox").addEventListener("click", () => { if (v.paused) v.play().catch(() => {}); else v.pause(); });
+  for (const ev of ["play", "pause", "ended", "emptied"]) v.addEventListener(ev, sync);
+  v.addEventListener("timeupdate", () => { $("rvProg").style.width = `${v.duration ? (v.currentTime / v.duration) * 100 : 0}%`; });
+}
+
 // ---------- saving ----------
 const pending = new Set();
 let saveTimer = null;
@@ -1126,7 +1135,7 @@ function showExport(blob, url, refresh = false, failed = false) {
   if (!refresh) {
     if (state.exportUrl) URL.revokeObjectURL(state.exportUrl);
     state.exportUrl = null;
-    v.src = url;
+    v.src = url.includes("#") ? url : `${url}#t=0.001`; // #t: iPhone shows the first frame instead of black
   }
   const acts = $("resultActions");
   acts.innerHTML = "";

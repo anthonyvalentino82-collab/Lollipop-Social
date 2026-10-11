@@ -979,3 +979,14 @@ body.sheet-open[data-size] .sheet:not(.tall) { max-height: none; }
 /* logos always sit inside their box */
 .logo-opt { overflow: visible; }
 .logo-opt img { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); max-width: none; max-height: none; object-fit: contain; }
+/* finished video: no player buttons while it plays — tap to play, tap again to pause */
+.rv-box { position: relative; height: 100%; max-width: 100%; aspect-ratio: 9 / 16; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.rv-box video { width: 100%; height: 100%; display: block; object-fit: contain; pointer-events: none; }
+.rv-play { position: absolute; left: 50%; top: 50%; translate: -50% -50%; width: 78px; height: 78px; border-radius: 50%; border: 0;
+  background: rgba(0,0,0,.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; place-items: center;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.7); pointer-events: none; transition: opacity .15s; }
+.rv-play svg { width: 38px; height: 38px; fill: #fff; margin-left: 5px; }
+.rv-box.playing .rv-play { opacity: 0; }
+.rv-bar { position: absolute; left: 12px; right: 12px; bottom: 10px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.25); overflow: hidden; pointer-events: none; transition: opacity .3s; }
+.rv-bar i { display: block; height: 100%; width: 0; background: #fff; }
+.rv-box.playing .rv-bar { opacity: .6; }
