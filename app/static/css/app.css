@@ -764,3 +764,18 @@ body.cam-open { overflow: hidden; }
 .hbtn[hidden] { display: none; }
 @keyframes hbtnShine { 0%, 55% { background-position: 150% 0; } 100% { background-position: -100% 0; } }
 @media (prefers-reduced-motion: reduce) { .hbtn, .hbtn::after, .hbtn-ai .hbtn-ico { animation: none; } }
+
+/* Same height for all four start buttons; brighter, punchier colors */
+.hbtn { padding: 12px 16px; }
+.hbtn-ai { padding: 12px 16px; }
+.hbtn-ai .hbtn-ico, .hbtn .hbtn-ico { width: 44px; height: 44px; font-size: 25px; }
+.hbtn-ai .hbtn-txt, .hbtn-txt { font-size: 18.5px; }
+.hbtn-txt small { font-size: 12.5px; }
+.hbtn-ai { background-image: linear-gradient(110deg, #ff1744 0%, #ff2d95 30%, #ffb300 62%, #ff1744 100%);
+  box-shadow: 0 0 0 2px #ffd54a, 0 0 22px rgba(255,45,149,.75), 0 8px 26px rgba(255,23,68,.6); }
+.hbtn-rec { background-image: linear-gradient(110deg, #ff1f2d 0%, #ff4d1a 40%, #ff9100 75%, #ff1f2d 100%);
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,.35), 0 0 18px rgba(255,77,26,.55), 0 8px 22px rgba(255,31,45,.45); }
+.hbtn-lib { background-image: linear-gradient(110deg, #7a0f2b 0%, #b0123f 38%, #d4880c 72%, #7a0f2b 100%);
+  box-shadow: 0 0 0 1.5px #ffd54a, 0 0 16px rgba(212,136,12,.5), 0 8px 22px rgba(0,0,0,.35); }
+.hbtn-cont { background-image: linear-gradient(110deg, #ffd600 0%, #fff176 40%, #ffab00 75%, #ffd600 100%);
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,.6), 0 0 18px rgba(255,214,0,.55), 0 8px 22px rgba(255,171,0,.4); }
