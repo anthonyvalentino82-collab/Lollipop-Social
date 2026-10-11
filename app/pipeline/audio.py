@@ -10,10 +10,10 @@ from .media import run, run_with_progress
 # compression -> broadcast loudness (-16 LUFS, the level social apps expect).
 VOICE_CHAIN = ",".join([
     "highpass=f=80",
-    "afftdn=nr=14:nf=-35:tn=1",
+    "afftdn=nr=10:nf=-40",
     "equalizer=f=200:t=q:w=1.2:g=-2",
     "equalizer=f=3200:t=q:w=1.0:g=3",
-    "acompressor=threshold=-20dB:ratio=3:attack=5:release=120:makeup=2",
+    "acompressor=threshold=-22dB:ratio=2.5:attack=15:release=250:makeup=2",
     "loudnorm=I=-16:TP=-1.5:LRA=11",
 ])
 

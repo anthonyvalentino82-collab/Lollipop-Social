@@ -416,7 +416,14 @@ async function camStart() {
   camStop();
   const portrait = window.innerHeight >= window.innerWidth;
   // Raw microphone: our own audio cleanup does a better job than the phone-call filters.
+  // Prefer the iPhone's own microphone: Bluetooth earbuds (AirPods) switch to a low-quality
+  // "phone call" mic when a web page records, which sounds choppy and cuts in and out.
   const audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+  try {
+    const mics = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
+    const builtIn = mics.find((d) => /iphone|built-?in|internal/i.test(d.label) && !/airpod|bluetooth|headset|beats/i.test(d.label));
+    if (builtIn && builtIn.deviceId) audio.deviceId = { exact: builtIn.deviceId };
+  } catch (e) { /* device list unavailable: use the default mic */ }
   // iPhone Safari interprets width/height in the camera sensor's (landscape) orientation in
   // some versions and in the screen's orientation in others. Asking the wrong way round
   // returns a cropped, zoomed-in feed, so try both and keep the one that matches the phone.
@@ -509,7 +516,7 @@ $("camRec").addEventListener("click", () => {
     const file = new File([blob], `recording.${type.includes("webm") ? "webm" : "mp4"}`, { type });
     handleVideoFile(file); // straight into upload + AI Edit, no camera roll
   };
-  rec.start(1000);
+  rec.start(); // one continuous recording (1-second slices can drop audio on iPhone)
   cam.t0 = Date.now();
   $("camRec").classList.add("on");
   $("camTime").hidden = false;

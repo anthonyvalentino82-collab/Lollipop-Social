@@ -91,7 +91,10 @@ def normalize(src: Path, dst: Path, info: dict, on_progress=lambda f: None) -> N
            "-c:v", "libx264", "-preset", "veryfast", "-crf", "15",
            "-movflags", "+faststart"]
     if info["has_audio"]:
-        cmd += ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2"]
+        # async resampling fills tiny timestamp gaps (common in browser recordings) instead of
+        # leaving dropouts, and keeps the sound in sync with the picture.
+        cmd += ["-af", "aresample=async=1000:first_pts=0",
+                "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2"]
     else:
         # Add a silent track so the rest of the pipeline can assume audio exists.
         cmd = cmd[:3] + ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"] + cmd[3:] + [
