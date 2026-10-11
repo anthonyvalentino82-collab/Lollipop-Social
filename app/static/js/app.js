@@ -941,6 +941,8 @@ function tpCount() {
 }
 $("tpInput").addEventListener("input", tpCount);
 $("tpClear").addEventListener("click", () => { $("tpInput").value = ""; tpCount(); $("tpInput").focus(); });
+// Changed their mind about a script: leave the camera and go back to the start screen.
+$("tpBack").addEventListener("click", () => { if (cam.rec) return; camReviewClose(); cam.take = 0; closeCamera(); });
 $("tpEdit").addEventListener("click", (e) => { if (e.target === $("tpEdit")) $("tpEdit").hidden = true; });
 $("tpPlay").addEventListener("click", () => tpPlay(!tp.playing));
 $("tpRestart").addEventListener("click", tpRestart);

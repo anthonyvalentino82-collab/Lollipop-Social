@@ -965,3 +965,7 @@ body.sheet-open .stage-row { align-items: start; }
 body.sheet-open .size-note, body.sheet-open .size-side { align-self: center; }
 .sheet .swatches.swatches-7 { grid-template-columns: repeat(7, 1fr); gap: 6px 4px; }
 .sheet .swatches-7 .swatch { width: 32px; height: 32px; }
+.tp-edit-head { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.tp-edit-head h3 { margin: 0; }
+.tp-back { flex: none; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(242,194,48,.55); background: rgba(255,255,255,.08); color: #fff; font-family: inherit; font-weight: 800; font-size: 16px; line-height: 1; cursor: pointer; }
+.tp-back:active { transform: scale(.96); }

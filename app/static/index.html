@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon-v6.png">
   <link rel="icon" href="/static/brand/favicon-v6.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=74">
+  <link rel="stylesheet" href="/static/css/app.css?v=75">
 </head>
 <body>
   <div class="app">
@@ -240,7 +240,7 @@
     </div>
     <div class="tp-edit" id="tpEdit" hidden>
       <div class="tp-edit-card">
-        <h3>Teleprompter</h3>
+        <div class="tp-edit-head"><button class="tp-back" id="tpBack" aria-label="Back to start">‹ Back</button><h3>Teleprompter</h3></div>
         <p class="note">Paste or type your script — or let AI write it. It scrolls at the top of the screen while you record.</p>
         <button class="ai-writer-btn" id="aiOpen"><span>🍭</span> LolliPOP AI Script Writer</button>
         <div class="ai-writer" id="aiPanel" hidden>
@@ -285,6 +285,6 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=59"></script>
+  <script type="module" src="/static/js/app.js?v=60"></script>
 </body>
 </html>
