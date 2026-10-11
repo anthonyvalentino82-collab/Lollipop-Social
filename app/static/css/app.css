@@ -803,3 +803,22 @@ body.cam-open { overflow: hidden; }
   .hbtn .hbtn-txt, .hbtn-ai .hbtn-txt { font-size: 19px; }
   .hbtn-txt small { font-size: 13px; margin-top: 2px; }
 }
+
+/* ---------- Pause while recording + review a take ---------- */
+.cam-pause { justify-self: start; height: 44px; padding: 0 16px; border-radius: 999px; border: 0; background: rgba(0,0,0,.55);
+  color: #fff; font-weight: 900; font-size: 15px; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.4); }
+.cam-pause.paused { background: var(--gold); color: #2a0a0c; box-shadow: 0 0 16px rgba(242,194,48,.6); }
+.cam-time.paused { background: #6b5a20; animation: camBlink 1s steps(2) infinite; }
+@keyframes camBlink { 50% { opacity: .45; } }
+.cam-review { position: absolute; inset: 0; z-index: 6; background: #120406; display: flex; flex-direction: column;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px calc(env(safe-area-inset-bottom, 0px) + 14px); gap: 10px; }
+.cam-review[hidden] { display: none; }
+.cam-review-head { display: flex; flex-direction: column; align-items: center; color: #fff; font-weight: 900; font-size: 18px; text-align: center; }
+.cam-review-head .note { font-weight: 600; font-size: 13px; }
+.cam-review video { flex: 1; min-height: 0; width: 100%; object-fit: contain; background: #000; border-radius: 16px; }
+.cam-review-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rv-btn { padding: 10px 12px !important; gap: 10px !important; }
+.rv-btn .hbtn-ico { width: 36px !important; height: 36px !important; font-size: 20px !important; }
+.rv-btn .hbtn-txt { font-size: 17px !important; }
+.rv-btn .hbtn-txt small { font-size: 11.5px !important; }
+.cam .cam-review video { position: static; inset: auto; height: auto; flex: 1; transform: none; }

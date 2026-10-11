@@ -518,6 +518,7 @@ async function camStart() {
 function camStop() {
   if (cam.rec && cam.rec.state !== "inactive") { cam.rec.onstop = null; cam.rec.stop(); }
   cam.rec = null;
+  camRecUI(false);
   clearInterval(cam.timer);
   cam.stream?.getTracks().forEach((t) => t.stop());
   cam.stream = null;
@@ -545,7 +546,12 @@ function closeCamera() {
   document.body.classList.remove("cam-open");
 }
 $("btnRecord").addEventListener("click", openCamera);
-$("camClose").addEventListener("click", closeCamera);
+$("camClose").addEventListener("click", () => {
+  if (!$("camReview").hidden && !confirm("Close the camera and delete this take?")) return;
+  if (cam.rec && !confirm("Stop and delete this recording?")) return;
+  camReviewClose(); cam.take = 0;
+  closeCamera();
+});
 $("camNative").addEventListener("click", () => { closeCamera(); $("inRecord").click(); });
 $("camFlip").addEventListener("click", async () => {
   if (cam.rec) return; // don't switch mid-recording
@@ -554,7 +560,7 @@ $("camFlip").addEventListener("click", async () => {
 });
 $("camRec").addEventListener("click", () => {
   if (!cam.stream) return;
-  if (cam.rec) { cam.rec.stop(); return; }
+  if (cam.rec) { if (cam.rec.state === "paused") cam.rec.resume(); cam.rec.stop(); return; }
   const mimeType = camMime();
   cam.chunks = [];
   const rec = new MediaRecorder(cam.stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 192_000 });
@@ -580,10 +586,9 @@ $("camRec").addEventListener("click", () => {
     tpPlay(false);
     dlog("recording stopped", { seconds: (Date.now() - cam.t0) / 1000, sizeMB: +(blob.size / 2 ** 20).toFixed(1), type, chunks: cam.chunks.length });
     cam.rec = null;
-    closeCamera();
+    camRecUI(false);
     if (!blob.size) { toast("Nothing was recorded — please try again."); return; }
-    const file = new File([blob], `recording.${type.includes("webm") ? "webm" : "mp4"}`, { type });
-    handleVideoFile(file); // straight into upload + AI Edit, no camera roll
+    camReview(new File([blob], `recording.${type.includes("webm") ? "webm" : "mp4"}`, { type }));
   };
   rec.onerror = (e) => dlog("recorder error", { message: String(e.error?.message || e.error || e) });
   cam.stallLogged = false;
@@ -591,10 +596,77 @@ $("camRec").addEventListener("click", () => {
   tpPlay(true); // teleprompter rolls with the recording
   rec.start(); // one continuous recording (1-second slices can drop audio on iPhone)
   cam.t0 = Date.now();
-  $("camRec").classList.add("on");
-  $("camTime").hidden = false;
+  cam.pausedMs = 0; cam.pausedAt = 0;
+  camRecUI(true);
   $("camTime").textContent = "0:00";
-  cam.timer = setInterval(() => { $("camTime").textContent = fmt((Date.now() - cam.t0) / 1000); }, 250);
+  cam.timer = setInterval(() => { $("camTime").textContent = fmt(camElapsed()); }, 250);
+});
+// Recording time, not counting pauses.
+function camElapsed() {
+  const now = cam.pausedAt || Date.now();
+  return (now - cam.t0 - (cam.pausedMs || 0)) / 1000;
+}
+function camRecUI(on) {
+  $("camRec").classList.toggle("on", on);
+  $("camTime").hidden = !on;
+  $("camPause").hidden = !on;
+  $("camPause").textContent = "⏸ Pause";
+  $("camPause").classList.remove("paused");
+  $("camNative").hidden = on;
+  $("camFlip").style.visibility = on ? "hidden" : "";
+  $("tpOpen").hidden = on;
+  if (!on) clearInterval(cam.timer);
+}
+// Pause / resume in the middle of a take (the teleprompter pauses with it).
+$("camPause").addEventListener("click", () => {
+  const rec = cam.rec; if (!rec) return;
+  if (rec.state === "recording") {
+    try { rec.pause(); } catch { toast("Pausing isn't supported on this phone — tap stop instead."); return; }
+    cam.pausedAt = Date.now(); tpPlay(false);
+    $("camPause").textContent = "▶ Resume"; $("camPause").classList.add("paused");
+    $("camTime").classList.add("paused");
+    dlog("recording paused", { at: camElapsed() });
+  } else if (rec.state === "paused") {
+    rec.resume();
+    cam.pausedMs += Date.now() - cam.pausedAt; cam.pausedAt = 0; tpPlay(true);
+    $("camPause").textContent = "⏸ Pause"; $("camPause").classList.remove("paused");
+    $("camTime").classList.remove("paused");
+    dlog("recording resumed", { at: camElapsed() });
+  }
+});
+// After a take: play it back; "Use this take" uploads it, "Retake" throws it away.
+function camReview(file) {
+  cam.take = (cam.take || 0) + 1;
+  cam.reviewFile = file;
+  cam.reviewUrl = URL.createObjectURL(file);
+  const v = $("camReviewVid");
+  v.src = cam.reviewUrl;
+  $("camReviewTitle").textContent = `Take ${cam.take} · ${fmt(camElapsed())}`;
+  $("camReview").hidden = false;
+  v.play().catch(() => {});
+}
+function camReviewClose() {
+  const v = $("camReviewVid");
+  v.pause(); v.removeAttribute("src"); v.load();
+  if (cam.reviewUrl) URL.revokeObjectURL(cam.reviewUrl);
+  cam.reviewUrl = null; cam.reviewFile = null;
+  $("camReview").hidden = true;
+}
+$("camRetake").addEventListener("click", () => {
+  if (!confirm("Delete this take and record again?")) return;
+  dlog("take discarded", { take: cam.take });
+  camReviewClose();
+  tpRestart(); // script back to the beginning
+  toast("Ready — tap the red button when you are.");
+});
+$("camUse").addEventListener("click", () => {
+  const file = cam.reviewFile; if (!file) return;
+  dlog("take used", { take: cam.take });
+  cam.reviewFile = null; // keep it from being freed before upload
+  camReviewClose();
+  cam.take = 0;
+  closeCamera();
+  handleVideoFile(file); // now upload + prepare for AI Edit
 });
 // ---------- teleprompter ----------
 // Script scrolls in the top half of the camera screen (near the lens). It starts scrolling when
