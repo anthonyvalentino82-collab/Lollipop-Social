@@ -289,6 +289,17 @@ def get_job(job_id: str):
     return job
 
 
+# ---------- 🍭 AI script writer (HOPS) ----------
+
+@app.post("/api/script")
+def write_script(topic: str = Body(...), seconds: int = Body(30)):
+    from .pipeline import script
+    try:
+        return script.write_script(topic, seconds)
+    except script.ScriptError as exc:
+        raise HTTPException(400, str(exc))
+
+
 # ---------- "Report a problem" (technical details only) ----------
 
 @app.post("/api/report")

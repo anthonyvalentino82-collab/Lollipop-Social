@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/brand/apple-touch-icon-v2.png">
   <link rel="icon" href="/static/brand/favicon-v2.png">
-  <link rel="stylesheet" href="/static/css/app.css?v=42">
+  <link rel="stylesheet" href="/static/css/app.css?v=43">
 </head>
 <body>
   <div class="app">
@@ -79,6 +79,7 @@
         Choose from library
       </label>
       <button class="link" id="btnContinue" hidden>Continue my last video ›</button>
+      <button class="ai-writer-btn hero-ai" id="btnAiWriter"><span>🍭</span> AI Script Writer + Teleprompter</button>
       <button class="link report-link" id="btnReport2">Report a problem</button>
     </section>
 
@@ -218,8 +219,21 @@
     <div class="tp-edit" id="tpEdit" hidden>
       <div class="tp-edit-card">
         <h3>Teleprompter</h3>
-        <p class="note">Paste or type your script. It scrolls at the top of the screen while you record.</p>
-        <textarea id="tpInput" rows="10" placeholder="Type or paste your script here…"></textarea>
+        <p class="note">Paste or type your script — or let AI write it. It scrolls at the top of the screen while you record.</p>
+        <button class="ai-writer-btn" id="aiOpen"><span>🍭</span> LolliPOP AI Script Writer</button>
+        <div class="ai-writer" id="aiPanel" hidden>
+          <div class="ai-hops"><b>H</b>ook <i>→</i> <b>O</b>bjection <i>→</i> <b>P</b>roblem <i>→</i> <b>S</b>olution</div>
+          <label class="ai-lbl" for="aiTopic">What do you want to talk about?</label>
+          <textarea id="aiTopic" rows="2" placeholder="e.g. Mortgage rates and why they're still high"></textarea>
+          <div class="ai-lbl">How long?</div>
+          <div class="ai-lengths" id="aiLengths">
+            <button data-s="15">15s</button><button data-s="30">30s</button><button data-s="45">45s</button><button data-s="60">60s</button><button data-s="75">75s</button>
+          </div>
+          <button class="ai-go" id="aiGo"><span id="aiGoText">✨ Write my script</span><i id="aiGoBar"></i></button>
+          <p class="note">Uses the latest news on your topic. Check facts before you post.</p>
+          <div class="ai-result" id="aiResult" hidden></div>
+        </div>
+        <textarea id="tpInput" rows="8" placeholder="Type or paste your script here…"></textarea>
         <div class="tp-count" id="tpCount">0 words · 0 s</div>
         <div class="tp-edit-row">
           <button class="btn btn-ghost" id="tpClear">Clear</button>
@@ -237,6 +251,6 @@
 
   <div class="toast" id="toast" hidden></div>
 
-  <script type="module" src="/static/js/app.js?v=34"></script>
+  <script type="module" src="/static/js/app.js?v=35"></script>
 </body>
 </html>

@@ -661,6 +661,65 @@ $("tpHide").addEventListener("click", () => { tpPlay(false); store("lp_tp_hidden
 $("tpText").addEventListener("click", () => tpPlay(!tp.playing)); // tap the words to pause / resume
 tpRender();
 
+// ---------- 🍭 AI script writer (HOPS: Hook → Objection → Problem → Solution) ----------
+const ai = { seconds: +(recall("lp_ai_seconds") || 30) };
+function aiLengths() {
+  for (const b of $("aiLengths").children) b.classList.toggle("on", +b.dataset.s === ai.seconds);
+}
+$("aiOpen").addEventListener("click", () => {
+  const open = $("aiPanel").hidden;
+  $("aiPanel").hidden = !open;
+  $("aiOpen").classList.toggle("on", open);
+  if (open) { $("aiTopic").value = $("aiTopic").value || recall("lp_ai_topic") || ""; aiLengths(); setTimeout(() => $("aiTopic").focus(), 50); }
+});
+$("aiLengths").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  ai.seconds = +b.dataset.s; store("lp_ai_seconds", ai.seconds); aiLengths();
+});
+$("aiGo").addEventListener("click", async () => {
+  const topic = $("aiTopic").value.trim();
+  if (topic.length < 3) { toast("Type a topic first — e.g. “why mortgage rates are high”"); $("aiTopic").focus(); return; }
+  store("lp_ai_topic", topic);
+  if ($("tpInput").value.trim() && !confirm("Replace the script that's already in the teleprompter?")) return;
+  const btn = $("aiGo"); btn.disabled = true;
+  const steps = ["Searching the latest news…", "Writing your hook…", "Handling the objection…", "Laying out the problem…", "Writing the solution…"];
+  const t0 = Date.now();
+  const tick = setInterval(() => {
+    const secs = (Date.now() - t0) / 1000;
+    const pct = Math.min(95, Math.round(100 * (1 - Math.exp(-secs / 25)))); // estimate: most scripts take 20–60 s
+    $("aiGoText").textContent = `${steps[Math.min(steps.length - 1, Math.floor(pct / 20))]} ${pct}%`;
+    $("aiGoBar").style.width = `${pct}%`;
+  }, 300);
+  dlog("ai script requested", { seconds: ai.seconds });
+  try {
+    const r = await api("/api/script", { method: "POST", json: { topic, seconds: ai.seconds } });
+    $("aiGoBar").style.width = "100%";
+    $("tpInput").value = r.script; tpCount();
+    $("aiResult").hidden = false;
+    $("aiResult").replaceChildren(
+      el("h4", {}, `✅ ${r.title || "Your script"} · ${r.seconds}s`),
+      el("div", { class: "ai-parts" }, el("span", {}, "Hook"), el("span", {}, "Objection"), el("span", {}, "Problem"), el("span", {}, "Solution")),
+      r.sources?.length ? el("div", {}, el("div", { class: "note" }, "Based on:"),
+        ...r.sources.map((s) => el("a", { href: s.url, target: "_blank", rel: "noopener" }, s.title))) : null,
+    );
+    toast("Script ready! Read it over, then tap “Use in teleprompter”.", 3500);
+    $("tpInput").scrollIntoView({ behavior: "smooth", block: "center" });
+  } catch (e) {
+    dlog("ai script failed", { message: e.message });
+    if (!(e instanceof AuthError)) toast(e.message, 5000);
+  } finally {
+    clearInterval(tick); btn.disabled = false;
+    $("aiGoText").textContent = "✨ Write my script"; setTimeout(() => ($("aiGoBar").style.width = "0"), 600);
+  }
+});
+// Landing page shortcut: open the camera with the script writer ready.
+$("btnAiWriter").addEventListener("click", async () => {
+  await openCamera();
+  if ($("cam").hidden) return;
+  $("tpOpen").click();
+  if ($("aiPanel").hidden) $("aiOpen").click();
+});
+
 for (const id of ["btnReport", "btnReport2"]) $(id)?.addEventListener("click", sendReport);
 $("inUpload").addEventListener("change", (e) => { handleVideoFile(e.target.files[0]); e.target.value = ""; });
 $("btnNew").addEventListener("click", () => { if (confirm("Start a new video? (This one stays saved on the server for 14 days.)")) resetToEmpty(); });
