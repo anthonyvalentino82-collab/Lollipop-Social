@@ -127,9 +127,9 @@ function upload(url, fields, onProgress) {
     x.onload = () => {
       if (x.status === 401) { showLogin(); return reject(new AuthError("login")); }
       let d = {}; try { d = JSON.parse(x.responseText); } catch {}
-      x.status < 300 ? resolve(d) : reject(new Error(d.detail || `Upload failed (${x.status})`));
+      x.status < 300 ? resolve(d) : reject(Object.assign(new Error(d.detail || `Upload failed (${x.status})`), { network: x.status >= 500 }));
     };
-    x.onerror = () => reject(new Error("Upload failed — check your connection."));
+    x.onerror = () => reject(Object.assign(new Error("Upload failed — check your connection. Your video is kept: tap Try again."), { network: true }));
     x.send(fd);
   });
 }
@@ -419,7 +419,18 @@ async function handleVideoFile(file) {
   dlog("video chosen", { name: file.name, type: file.type, sizeMB: +(file.size / 2 ** 20).toFixed(1) });
   try {
     busy("Uploading… 0%", 0);
-    const res = await upload("/api/projects", { file }, (f) => busy(`Uploading… ${Math.round(f * 100)}%`, f));
+    // Weak signal or the server restarting for an update can drop an upload: retry a few times.
+    let res;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        res = await upload("/api/projects", { file }, (f) => busy(`Uploading… ${Math.round(f * 100)}%`, f));
+        break;
+      } catch (e) {
+        if (e instanceof AuthError || !e.network || attempt >= 4) throw e;
+        dlog("upload retry", { attempt, message: e.message });
+        for (let w = attempt * 4; w > 0; w--) { busy(`Connection dropped — retrying in ${w}s…`, 0); await new Promise((r) => setTimeout(r, 1000)); }
+      }
+    }
     busy("Preparing your video…", 0);
     await waitJob(res.job, (j) => busy(j.message, j.progress));
     const p = await api(`/api/projects/${res.project.id}`);
@@ -429,7 +440,8 @@ async function handleVideoFile(file) {
   } catch (e) {
     busy(null);
     dlog("upload failed", { message: e.message });
-    if (!(e instanceof AuthError)) toast(e.message, 5000);
+    // Keep the video: offer to try again instead of losing the take.
+    if (!(e instanceof AuthError)) showError("The upload didn't go through", e, () => handleVideoFile(file));
   }
 }
 $("inRecord").addEventListener("change", (e) => { handleVideoFile(e.target.files[0]); e.target.value = ""; });
@@ -1083,7 +1095,7 @@ function renderSheet({ key, title, step, content, footer }) {
 }
 
 function openSheet(tool, title, content) {
-  if (!state.project && tool !== "clips") return;
+  if (!state.project && tool !== "clips" && tool !== "error") return;
   state.wizard = null;
   renderSheet({ key: tool, title: title || TITLES[tool], content: content || BUILDERS[tool]() });
 }
