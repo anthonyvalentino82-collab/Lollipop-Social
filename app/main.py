@@ -63,6 +63,11 @@ def login(password: str = Body(..., embed=True)):
     return resp
 
 
+@app.on_event("startup")
+def _shrink_old_sources():
+    jobs.submit("shrink", "-", projects.shrink_sources)
+
+
 @app.get("/healthz")
 def healthz():
     return {"ok": True}

@@ -207,6 +207,10 @@ const preview = new Preview($("canvas"), video, {
   },
   onTime: (t) => updateScrub(t),
 });
+// For "Report a problem": what the phone's video player did with the working copy.
+video.addEventListener("error", () => dlog("video error", { code: video.error?.code, message: video.error?.message }));
+video.addEventListener("loadeddata", () => dlog("video loaded", { w: video.videoWidth, h: video.videoHeight, ready: video.readyState, dur: +video.duration.toFixed(2) }));
+video.addEventListener("stalled", () => dlog("video stalled", { ready: video.readyState, t: +video.currentTime.toFixed(2) }));
 video.addEventListener("play", () => $("ppBtn").classList.add("playing"));
 video.addEventListener("pause", () => $("ppBtn").classList.remove("playing"));
 const togglePlay = () => { if (video.paused) preview.play(); else preview.pause(); };

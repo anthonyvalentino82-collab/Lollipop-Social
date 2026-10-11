@@ -76,6 +76,13 @@ def has_filter(name: str) -> bool:
         return False
 
 
+# The working copy plays in the phone's preview and is the source for the final video: very high
+# quality, but capped so a full-HD recording stays a size iPhone Safari loads and draws smoothly
+# (uncapped it reached ~16 Mbit/s — 67 MB for 33 s — and the preview stayed black).
+WORKING_COPY = ["-crf", "17", "-maxrate", "9M", "-bufsize", "18M", "-profile:v", "high", "-level:v", "4.1",
+                "-color_range", "tv"]
+
+
 def normalize_vf(info: dict) -> list[str]:
     """Video filters that turn a phone video into the working format (30fps, short side ≤1080,
     HDR tone-mapped to SDR, yuv420p)."""
@@ -98,7 +105,7 @@ def normalize(src: Path, dst: Path, info: dict, on_progress=lambda f: None) -> N
     30fps working copy whose short side is at most 1080px."""
     vf = normalize_vf(info)
     cmd = ["ffmpeg", "-y", "-threads", config.FFMPEG_THREADS, "-i", str(src), "-vf", ",".join(vf),
-           "-c:v", "libx264", "-preset", "veryfast", "-crf", "15", "-threads", config.FFMPEG_THREADS,
+           "-c:v", "libx264", "-preset", "veryfast", *WORKING_COPY, "-threads", config.FFMPEG_THREADS,
            "-movflags", "+faststart"]
     if info["has_audio"]:
         # async resampling fills tiny timestamp gaps (common in browser recordings) instead of
@@ -225,7 +232,7 @@ def stitch_segments(segs: list[Path], offsets: list[float], dst: Path, vf: list[
             # `vf` = the working-copy filters, so the joined file IS the working copy (one encode, not two).
             run(["ffmpeg", "-y", "-threads", config.FFMPEG_THREADS, "-ss", f"{a:.3f}", "-i", str(s), "-t", f"{b - a:.3f}",
                  "-map", "0:v:0", "-an", "-vf", ",".join(vf or ["fps=30", "format=yuv420p"]), "-c:v", "libx264",
-                 "-preset", "veryfast", "-crf", "15", "-threads", config.FFMPEG_THREADS, "-movflags", "+faststart", str(part)])
+                 "-preset", "veryfast", *WORKING_COPY, "-threads", config.FFMPEG_THREADS, "-movflags", "+faststart", str(part)])
             names.append(part)
             on_progress((i + 1) / (len(segs) + 1))
         # Sound: cut and joined in one pass (audio is tiny; the video streams aren't decoded).

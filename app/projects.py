@@ -242,6 +242,29 @@ def prepare(pid: str, progress) -> dict:
     return {"ok": True}
 
 
+def shrink_sources(progress) -> dict:
+    """One-time fix for working copies made before the size cap (~16 Mbit/s full-HD files that
+    left the phone's preview black): re-encode them at the capped size, in place."""
+    fixed = []
+    for d in sorted(config.PROJECTS_DIR.iterdir()):
+        src = d / "source.mp4"
+        if not src.exists() or (d / ".shrunk").exists():
+            continue
+        try:
+            info = media.probe(src)
+            rate = src.stat().st_size * 8 / max(1.0, info["duration"])
+            if rate > 12_000_000:
+                tmp = d / "source.tmp.mp4"
+                media.normalize(src, tmp, info)
+                tmp.replace(src)
+                (d / "poster.jpg").unlink(missing_ok=True)
+                fixed.append(d.name)
+            (d / ".shrunk").write_text("1")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[shrink] {d.name}: {exc}")
+    return {"fixed": fixed}
+
+
 def auto_edit(pid: str, progress, opts: dict | None = None) -> dict:
     """opts (one-tap AI edit): {"broll": {"mode": "ai" | "chosen" | "off",
     "items": [{"query": "house keys"} | {"clip": "<my clip id>"}]}}. Without opts: the classic AI edit."""
