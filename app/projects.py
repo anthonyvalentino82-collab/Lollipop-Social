@@ -29,7 +29,7 @@ DEFAULT_SETTINGS = {
                         "highlightStyle": "box", "boxText": "#FFFFFF",
                         "stroke": 7, "strokeColor": "#000000", "uppercase": True, "animation": "pop",
                         "x": 0.5, "y": 0.72, "maxWords": 3},
-    "headlineDefaults": {"font": "Anton", "size": 130, "color": "#E9E1D3", "accent": "#D7262E",
+    "headlineDefaults": {"font": "Anton", "size": 130, "color": "#F3E9D2", "accent": "#B3121B",
                          "uppercase": True, "lineHeight": 0.95, "maxWidth": 0.92,
                          "x": 0.5, "y": 0.27, "behind": True},
     "zoomDefaults": {"intensity": "medium"},

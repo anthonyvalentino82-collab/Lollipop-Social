@@ -1375,9 +1375,14 @@ function chips(label, options, current, onpick) {
   return el("div", { class: "field" }, label ? el("label", { class: "label" }, label) : null, wrap);
 }
 // 10 ready-made colors + a color wheel for any custom color.
-const PALETTE = ["#FFFFFF", "#E9E1D3", "#E3202A", "#F2C230", "#FF7A1A", "#FF3D8B", "#8B5CF6", "#2F80ED", "#14B8A6", "#22C55E"];
-function swatches(label, _colors, current, onpick) {
-  const wrap = el("div", { class: "swatches" });
+const PALETTE_DEFAULT = ["#FFFFFF", "#E9E1D3", "#E3202A", "#F2C230", "#FF7A1A", "#FF3D8B", "#8B5CF6", "#2F80ED", "#14B8A6", "#22C55E"];
+// Headline: white, cream, pale yellow, deep yellow, sunburst orange, bright pink, deep red,
+// Tiffany blue, deep ocean blue, forest green, navy, leather brown, black (+ color wheel = 14, two rows of 7).
+const HEADLINE_PALETTE = ["#FFFFFF", "#F3E9D2", "#FFF1A8", "#F2C230", "#FF8C1A", "#FF3D8B", "#B3121B",
+  "#0ABAB5", "#0B5394", "#1F6B3A", "#14213D", "#7B4A2A", "#111111"];
+function swatches(label, colors, current, onpick) {
+  const PALETTE = colors || PALETTE_DEFAULT;
+  const wrap = el("div", { class: `swatches${colors ? " swatches-7" : ""}` });
   const preview = el("span", { class: "color-now" });
   const draw = (cur) => {
     wrap.innerHTML = "";
@@ -1567,9 +1572,9 @@ function captionsSheet() {
     chips("Position", [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]], null, (v) => { s.y = { top: 0.2, middle: 0.5, bottom: 0.72 }[v]; s.x = 0.5; changed(); }),
     fontPicker("Font", FONTS_CAPTION, s.font, (v) => { s.font = v; changed(); }),
     slider("Size", { min: 32, max: 140, value: s.size || 66, oninput: (v) => { s.size = v; changed(); } }),
-    swatches("Text color", TEXT_COLORS, s.color, (v) => { s.color = v; changed(); }),
+    swatches("Text color", null, s.color, (v) => { s.color = v; changed(); }),
     chips("Spoken-word highlight", [["color", "Colored word"], ["box", "Box behind word"]], s.highlightStyle || "color", (v) => { s.highlightStyle = v; changed(); }),
-    swatches("Highlight color", ACCENT_COLORS, s.highlight, (v) => { s.highlight = v; changed(); }),
+    swatches("Highlight color", null, s.highlight, (v) => { s.highlight = v; changed(); }),
     chips("Words at a time", [1, 2, 3, 4].map((n) => [n, String(n)]), s.maxWords || 3, (n) => {
       s.maxWords = n;
       const words = (c.lines || []).flatMap((l) => l.words);
@@ -1603,8 +1608,8 @@ function headlineSheet() {
     el("p", { class: "note" }, "Drag the headline on the preview to move it. Pinch to resize."),
     fontPicker("Font", FONTS_HEADLINE, h.font, (v) => { h.font = v; changed(); }),
     slider("Size", { min: 50, max: 320, value: h.size || 150, oninput: (v) => { h.size = v; changed(); } }),
-    swatches("Main color", TEXT_COLORS, h.color, (v) => { h.color = v; changed(); }),
-    swatches("*Starred* word color", ACCENT_COLORS, h.accent, (v) => { h.accent = v; changed(); }),
+    swatches("Main color", HEADLINE_PALETTE, h.color, (v) => { h.color = v; changed(); }),
+    swatches("*Starred* word color", HEADLINE_PALETTE, h.accent, (v) => { h.accent = v; changed(); }),
     toggle("ALL CAPS", h.uppercase !== false, (v) => { h.uppercase = v; changed(); }),
   ];
 }
@@ -1751,7 +1756,7 @@ const CAPTION_PRESETS = [
   { name: "Fun & Curly", style: { font: "Lobster", color: "#FFFFFF", highlight: "#F2C230", highlightStyle: "color", stroke: 6, uppercase: false, animation: "pop", size: 72 } },
 ];
 const HEADLINE_PRESETS = [
-  { name: "Big & Boxy", font: "Anton", color: "#E9E1D3", accent: "#D7262E", block: true },
+  { name: "Big & Boxy", font: "Anton", color: "#F3E9D2", accent: "#B3121B", block: true },
   { name: "Thin", font: "Bebas Neue", color: "#FFFFFF", accent: "#F2C230", block: true },
   { name: "Fun & Curly", font: "Lobster", color: "#FFFFFF", accent: "#F2C230", block: false },
 ];
@@ -1834,8 +1839,8 @@ function headlineStep() {
     }))),
     more(recall("lp_more_headline"),
       slider("Size", { min: 50, max: 320, value: h.size || 130, oninput: (v) => { h.size = v; changed(); } }),
-      swatches("Color", null, h.color, (v) => { h.color = v; changed(); }),
-      swatches("*Starred* word color", null, h.accent, (v) => { h.accent = v; changed(); }),
+      swatches("Color", HEADLINE_PALETTE, h.color, (v) => { h.color = v; changed(); }),
+      swatches("*Starred* word color", HEADLINE_PALETTE, h.accent, (v) => { h.accent = v; changed(); }),
       fontPicker("Font", FONTS_HEADLINE, h.font, (v) => { h.font = v; changed(); }),
       el("div", { class: "toggles" },
         toggle("Square block", h.block !== false, (v) => { h.block = v; changed(); }),

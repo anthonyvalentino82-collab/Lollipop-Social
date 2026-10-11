@@ -963,3 +963,5 @@ body.sheet-open[data-size="l"] .stage { width: min(calc(100vw - 210px), calc(var
 
 body.sheet-open .stage-row { align-items: start; }
 body.sheet-open .size-note, body.sheet-open .size-side { align-self: center; }
+.sheet .swatches.swatches-7 { grid-template-columns: repeat(7, 1fr); gap: 6px 4px; }
+.sheet .swatches-7 .swatch { width: 32px; height: 32px; }
