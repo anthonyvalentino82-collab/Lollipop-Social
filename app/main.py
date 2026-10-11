@@ -201,9 +201,27 @@ def list_projects():
 
 
 @app.post("/api/projects")
-def create_project(file: UploadFile = File(...)):
-    project, dst = projects.create(file.filename or "video.mov")
-    _save_upload(file, dst)
+def create_project(file: UploadFile | None = File(None), segments: list[UploadFile] | None = File(None),
+                   offsets: str = Form("")):
+    """One video file, or an in-app recording sent as overlapping pieces (`segments` + their
+    start `offsets` in seconds), which are joined on the server."""
+    import json as _json
+    if segments:
+        try:
+            offs = [float(x) for x in _json.loads(offsets)]
+        except (ValueError, TypeError):
+            raise HTTPException(400, "Bad recording pieces")
+        if len(offs) != len(segments) or len(segments) > 200:
+            raise HTTPException(400, "Bad recording pieces")
+        project, dst = projects.create("recording.mp4")
+        for i, seg in enumerate(segments):
+            _save_upload(seg, dst.parent / f"seg{i}.vid")
+        (dst.parent / "segments.json").write_text(_json.dumps(offs))
+    elif file is not None:
+        project, dst = projects.create(file.filename or "video.mov")
+        _save_upload(file, dst)
+    else:
+        raise HTTPException(400, "No video was sent")
     job = jobs.submit("prepare", project["id"], projects.prepare, project["id"])
     return {"project": project, "job": job}
 

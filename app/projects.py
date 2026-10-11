@@ -180,6 +180,19 @@ def create(upload_name: str) -> tuple[dict, Path]:
 def prepare(pid: str, progress) -> dict:
     """Make a clean H.264 working copy that plays in Safari and is easy to process."""
     d = pdir(pid)
+    segs = sorted(d.glob("seg*.vid"), key=lambda f: int(f.stem[3:]))
+    if segs:  # in-app recording made of overlapping pieces: join them first
+        progress(0.03, "Joining your recording")
+        import json as _json
+        offsets = _json.loads((d / "segments.json").read_text())
+        starts = media.stitch_segments(segs, offsets, d / "original.mp4")
+        for f in segs:
+            f.unlink(missing_ok=True)
+        with _lock:
+            p = load(pid)
+            p["segmentStarts"] = [round(x, 3) for x in starts]
+            p["segmentOffsets"] = offsets
+            save(p)
     original = next(d.glob("original.*"))
     progress(0.05, "Reading video")
     info = media.probe(original)

@@ -142,3 +142,71 @@ def frozen_at(src: Path, duration: float, min_len: float = 3.0) -> float | None:
 def thumbnail(src: Path, dst: Path, t: float = 0.5, width: int = 240) -> None:
     run(["ffmpeg", "-y", "-ss", str(t), "-i", str(src), "-frames:v", "1",
          "-vf", f"scale={width}:-2", "-q:v", "4", str(dst)])
+
+
+def _pcm(src: Path, rate: int = 8000) -> "np.ndarray":
+    import numpy as np
+    proc = subprocess.run(["ffmpeg", "-v", "error", "-i", str(src), "-vn", "-ac", "1", "-ar", str(rate),
+                           "-f", "s16le", "-"], capture_output=True)
+    return np.frombuffer(proc.stdout, np.int16).astype(np.float32) / 32768
+
+
+def _align(prev: "np.ndarray", cur: "np.ndarray", expected: float, rate: int = 8000,
+           probe: float = 0.6, search: float = 0.8) -> float:
+    """Where (in seconds of `prev`) does `cur` start? Matches the sound at the start of `cur`
+    against `prev` around the `expected` position. Falls back to `expected` if it's unclear."""
+    import numpy as np
+    n = int(probe * rate)
+    a = cur[:n]
+    if len(a) < n or float(np.sqrt(np.mean(a ** 2))) < 0.003:
+        return expected  # silence: nothing to match
+    lo = max(0, int((expected - search) * rate))
+    hi = min(len(prev), int((expected + search) * rate) + n)
+    win = prev[lo:hi]
+    if len(win) < n * 1.2:
+        return expected
+    a = (a - a.mean()) / (a.std() + 1e-9)
+    corr = np.correlate(win - win.mean(), a, mode="valid")
+    energy = np.sqrt(np.convolve((win - win.mean()) ** 2, np.ones(n), mode="valid")) + 1e-9
+    score = corr / energy / np.sqrt(n)
+    best = float(score.max())
+    if best < 0.5:  # weak match
+        return expected
+    # Repetitive sound can match in several places: among near-equal matches, take the one
+    # closest to where the phone said the piece started.
+    cands = np.flatnonzero(score >= best * 0.9)
+    k = int(cands[np.argmin(np.abs((lo + cands) / rate - expected))])
+    return (lo + k) / rate
+
+
+def stitch_segments(segs: list[Path], offsets: list[float], dst: Path) -> list[float]:
+    """Join overlapping recording pieces (the phone restarts its recorder every few seconds)
+    into one video. Each piece's real start is found by matching the overlapping sound, then the
+    pieces are cut in the middle of each overlap and joined. Returns the starts used."""
+    starts = [0.0]
+    durs = [probe(s)["duration"] for s in segs]
+    pcm_prev = _pcm(segs[0])
+    for i in range(1, len(segs)):
+        pcm_cur = _pcm(segs[i])
+        expected = max(0.0, offsets[i] - offsets[i - 1])
+        starts.append(starts[-1] + _align(pcm_prev, pcm_cur, expected))
+        pcm_prev = pcm_cur
+    # Cut points: middle of each overlap (or the end of the earlier piece if they don't overlap).
+    cuts = []
+    for i in range(1, len(segs)):
+        prev_end = starts[i - 1] + durs[i - 1]
+        cuts.append((starts[i] + min(prev_end, starts[i] + 1.0)) / 2 if prev_end > starts[i] else prev_end)
+    parts, inputs = [], []
+    for i, s in enumerate(segs):
+        g0 = 0.0 if i == 0 else cuts[i - 1]
+        g1 = starts[i] + durs[i] if i == len(segs) - 1 else cuts[i]
+        a, b = max(0.0, g0 - starts[i]), max(0.01, g1 - starts[i])
+        inputs += ["-i", str(s)]
+        parts.append(f"[{i}:v]trim=start={a:.3f}:end={b:.3f},setpts=PTS-STARTPTS,fps=30,format=yuv420p[v{i}];"
+                     f"[{i}:a]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS,aresample=48000[a{i}]")
+    graph = ";".join(parts) + ";" + "".join(f"[v{i}][a{i}]" for i in range(len(segs))) + \
+        f"concat=n={len(segs)}:v=1:a=1[v][a]"
+    run(["ffmpeg", "-y", *inputs, "-filter_complex", graph, "-map", "[v]", "-map", "[a]",
+         "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-c:a", "aac", "-b:a", "192k",
+         "-movflags", "+faststart", str(dst)])
+    return starts

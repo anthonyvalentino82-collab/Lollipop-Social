@@ -120,7 +120,7 @@ async function api(path, opts = {}) {
 function upload(url, fields, onProgress) {
   return new Promise((resolve, reject) => {
     const fd = new FormData();
-    for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+    for (const [k, v] of Object.entries(fields)) for (const x of Array.isArray(v) ? v : [v]) fd.append(k, x);
     const x = new XMLHttpRequest();
     x.open("POST", url);
     x.upload.onprogress = (e) => e.lengthComputable && onProgress && onProgress(e.loaded / e.total);
@@ -416,14 +416,18 @@ function resetToEmpty() {
 
 async function handleVideoFile(file) {
   if (!file) return;
-  dlog("video chosen", { name: file.name, type: file.type, sizeMB: +(file.size / 2 ** 20).toFixed(1) });
+  if (file.pieces) dlog("take uploading", { pieces: file.pieces.length, sizeMB: +(file.pieces.reduce((n, p) => n + p.file.size, 0) / 2 ** 20).toFixed(1) });
+  else dlog("video chosen", { name: file.name, type: file.type, sizeMB: +(file.size / 2 ** 20).toFixed(1) });
   try {
     busy("Uploading… 0%", 0);
     // Weak signal or the server restarting for an update can drop an upload: retry a few times.
     let res;
     for (let attempt = 1; ; attempt++) {
       try {
-        res = await upload("/api/projects", { file }, (f) => busy(`Uploading… ${Math.round(f * 100)}%`, f));
+        const fields = file.pieces?.length > 1
+          ? { segments: file.pieces.map((p) => p.file), offsets: JSON.stringify(file.pieces.map((p) => p.offset)) }
+          : { file: file.pieces ? file.pieces[0].file : file };
+        res = await upload("/api/projects", fields, (f) => busy(`Uploading… ${Math.round(f * 100)}%`, f));
         break;
       } catch (e) {
         if (e instanceof AuthError || !e.network || attempt >= 4) throw e;
@@ -601,11 +605,65 @@ function camCountdownCancel() {
   $("camCount").hidden = true;
   $("camRec").classList.remove("counting");
 }
+// iPhone Safari's recorder can stop saving the picture after ~13-15 s while the sound keeps
+// going. So a take is recorded as short overlapping pieces: a fresh recorder starts every
+// SEG_LEN seconds and runs alongside the old one for SEG_OVERLAP s before the old one stops.
+// The server lines the pieces up by their sound and joins them into one video.
+const SEG_LEN = 8, SEG_OVERLAP = 1.2;
+class SegmentedRecorder {
+  constructor(stream, opts, elapsed) {
+    this.stream = stream; this.opts = opts; this.elapsed = elapsed;
+    this.state = "inactive"; this.mimeType = ""; this.segs = []; this.active = []; this.onstop = null; this.onerror = null;
+  }
+  _newSeg() {
+    const mr = new MediaRecorder(this.stream, this.opts);
+    const seg = { offset: this.elapsed(), chunks: [], mr };
+    seg.done = new Promise((res) => {
+      mr.ondataavailable = (e) => { if (e.data && e.data.size) seg.chunks.push(e.data); };
+      mr.onstop = () => { this.active = this.active.filter((x) => x !== seg); res(); };
+    });
+    mr.onerror = (e) => this.onerror?.(e);
+    mr.start(); // each piece is one continuous recording
+    this.mimeType = mr.mimeType || this.mimeType;
+    this.segs.push(seg); this.active.push(seg);
+    return seg;
+  }
+  start() { this.state = "recording"; this._newSeg(); }
+  // Called a few times a second while recording: start the next piece when it's time.
+  tick() {
+    if (this.state !== "recording" || this.rotating) return;
+    const cur = this.segs[this.segs.length - 1];
+    if (this.elapsed() - cur.offset < SEG_LEN) return;
+    this.rotating = true;
+    try {
+      this._newSeg();
+      setTimeout(() => { if (cur.mr.state !== "inactive") cur.mr.stop(); this.rotating = false; }, SEG_OVERLAP * 1000);
+    } catch (e) {
+      // Couldn't run two recorders at once: switch pieces back to back instead.
+      dlog("overlap recorder failed", { message: String(e?.message || e) });
+      cur.mr.onstop = ((orig) => () => { orig?.(); try { this._newSeg(); } catch {} this.rotating = false; })(cur.mr.onstop);
+      cur.mr.stop();
+    }
+  }
+  pause() { for (const s of this.active) if (s.mr.state === "recording") s.mr.pause(); this.state = "paused"; }
+  resume() { for (const s of this.active) if (s.mr.state === "paused") s.mr.resume(); this.state = "recording"; }
+  async stop() {
+    if (this.state === "inactive") return;
+    this.state = "inactive";
+    for (const s of [...this.active]) if (s.mr.state !== "inactive") s.mr.stop();
+    await Promise.all(this.segs.map((s) => s.done));
+    const type = this.mimeType || "video/mp4";
+    const ext = type.includes("webm") ? "webm" : "mp4";
+    const pieces = this.segs
+      .map((s, i) => ({ offset: s.offset, file: new File([new Blob(s.chunks, { type })], `piece${i}.${ext}`, { type }) }))
+      .filter((p) => p.file.size > 0);
+    this.onstop?.(pieces, type);
+  }
+}
 function camStartRec() {
   if (!cam.stream || cam.rec) return;
   const mimeType = camMime();
-  cam.chunks = [];
-  const rec = new MediaRecorder(cam.stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 5_000_000, audioBitsPerSecond: 160_000 });
+  const rec = new SegmentedRecorder(cam.stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 5_000_000, audioBitsPerSecond: 160_000 }, camElapsed);
   cam.rec = rec;
   // Watchdog: warn right away if the camera stops sending pictures while recording.
   const vtrack = cam.stream.getVideoTracks()[0];
@@ -621,33 +679,31 @@ function camStartRec() {
     if (cam.rec !== rec) { clearInterval(cam.watch); return; }
     if (view.requestVideoFrameCallback && performance.now() - lastFrameAt > 2500) stalled("no frames");
   }, 1000);
-  rec.ondataavailable = (e) => { if (e.data && e.data.size) cam.chunks.push(e.data); };
-  rec.onstop = () => {
-    const type = rec.mimeType || mimeType || "video/mp4";
-    const blob = new Blob(cam.chunks, { type });
+  rec.onstop = (pieces, type) => {
     tpPlay(false);
-    dlog("recording stopped", { seconds: (Date.now() - cam.t0) / 1000, sizeMB: +(blob.size / 2 ** 20).toFixed(1), type, chunks: cam.chunks.length });
+    const bytes = pieces.reduce((n, p) => n + p.file.size, 0);
+    dlog("recording stopped", { seconds: camElapsed(), sizeMB: +(bytes / 2 ** 20).toFixed(1), type, pieces: pieces.length, offsets: pieces.map((p) => +p.offset.toFixed(2)) });
     cam.rec = null;
     camRecUI(false);
-    if (!blob.size) { toast("Nothing was recorded — please try again."); return; }
+    if (!bytes) { toast("Nothing was recorded — please try again."); return; }
     // Release the camera while the take plays back: on iPhone, playing a video while the camera
     // is live can freeze the camera feed. Retake opens a fresh camera.
     cam.stream?.getTracks().forEach((t) => t.stop());
     cam.stream = null;
-    camReview(new File([blob], `recording.${type.includes("webm") ? "webm" : "mp4"}`, { type }));
+    camReview({ pieces, length: camElapsed() });
   };
   rec.onerror = (e) => dlog("recorder error", { message: String(e.error?.message || e.error || e) });
   cam.stallLogged = false;
   dlog("recording started", { mimeType: rec.mimeType || mimeType });
-  rec.start(); // one continuous recording (1-second slices can drop audio on iPhone)
+  cam.t0 = Date.now();
+  cam.pausedMs = 0; cam.pausedAt = 0;
+  rec.start();
   // Hold the first line on screen for a moment, then start scrolling.
   clearTimeout(cam.tpDelay);
   cam.tpDelay = setTimeout(() => { if (cam.rec === rec && rec.state === "recording") tpPlay(true); }, 2000);
-  cam.t0 = Date.now();
-  cam.pausedMs = 0; cam.pausedAt = 0;
   camRecUI(true);
   $("camTime").textContent = "0:00";
-  cam.timer = setInterval(() => { $("camTime").textContent = fmt(camElapsed()); }, 250);
+  cam.timer = setInterval(() => { $("camTime").textContent = fmt(camElapsed()); rec.tick(); }, 250);
 }
 // Recording time, not counting pauses.
 function camElapsed() {
@@ -683,26 +739,44 @@ $("camPause").addEventListener("click", () => {
   }
 });
 // After a take: play it back; "Use this take" uploads it, "Retake" throws it away.
-function camReview(file) {
+function camReview(take) {
   cam.take = (cam.take || 0) + 1;
-  cam.reviewFile = file;
-  cam.reviewUrl = URL.createObjectURL(file);
+  cam.reviewFile = take;
+  cam.reviewUrls = take.pieces.map((p) => URL.createObjectURL(p.file));
   const v = $("camReviewVid");
-  v.src = cam.reviewUrl;
-  $("camReviewTitle").textContent = `Take ${cam.take} · ${fmt(camElapsed())}`;
+  $("camReviewTitle").textContent = `Take ${cam.take} · ${fmt(take.length)}`;
   $("camReviewWarn").hidden = true;
   $("camReview").hidden = false;
   cam.reviewBroken = false;
-  checkTakePicture(v).then((end) => {
-    if (end != null) {
-      cam.reviewBroken = true;
-      $("camReviewWarn").hidden = false;
-      $("camReviewWarn").textContent = `⚠️ Your iPhone stopped recording the picture at ${fmt(end)} (the sound kept going). Please tap Retake.`;
-      dlog("take picture stopped early", { at: end, length: v.duration });
+  (async () => {
+    // Check every piece: if one's picture stops early, the phone dropped video there.
+    for (let i = 0; i < cam.reviewUrls.length && cam.reviewFile === take; i++) {
+      v.src = cam.reviewUrls[i];
+      const end = await checkTakePicture(v);
+      if (end != null) {
+        const at = take.pieces[i].offset + end;
+        cam.reviewBroken = true;
+        $("camReviewWarn").hidden = false;
+        $("camReviewWarn").textContent = `⚠️ Your iPhone stopped recording the picture at ${fmt(at)} (the sound kept going). Please tap Retake.`;
+        dlog("take picture stopped early", { at, piece: i, pieceLength: v.duration });
+        break;
+      }
     }
-    v.currentTime = 0;
+    if (cam.reviewFile !== take) return;
+    // Play the pieces back to back.
+    let i = 0;
+    v.onended = () => { if (++i < cam.reviewUrls.length) { v.src = cam.reviewUrls[i]; v.play().catch(() => {}); } };
+    v.src = cam.reviewUrls[0];
     v.play().catch(() => {});
-  });
+  })();
+}
+function camReviewClose() {
+  const v = $("camReviewVid");
+  v.onended = null;
+  v.pause(); v.removeAttribute("src"); v.load();
+  for (const u of cam.reviewUrls || []) URL.revokeObjectURL(u);
+  cam.reviewUrls = []; cam.reviewFile = null;
+  $("camReview").hidden = true;
 }
 // Jump to the end of the take and see which frame shows: if the last picture is from much
 // earlier, the phone stopped recording video partway through. Returns that time, or null if fine.
@@ -719,13 +793,6 @@ async function checkTakePicture(v) {
     const last = await shown;
     return last != null && last < v.duration - 2 ? last : null;
   } catch { return null; }
-}
-function camReviewClose() {
-  const v = $("camReviewVid");
-  v.pause(); v.removeAttribute("src"); v.load();
-  if (cam.reviewUrl) URL.revokeObjectURL(cam.reviewUrl);
-  cam.reviewUrl = null; cam.reviewFile = null;
-  $("camReview").hidden = true;
 }
 $("camRetake").addEventListener("click", async () => {
   if (!confirm("Delete this take and record again?")) return;
