@@ -6,21 +6,41 @@ import numpy as np
 
 from .media import run, run_with_progress
 
-# Rumble cut -> FFT noise reduction -> presence boost for clarity -> gentle
-# compression -> broadcast loudness (-16 LUFS, the level social apps expect).
-VOICE_CHAIN = ",".join([
+# Rumble cut -> light noise reduction -> presence boost for clarity -> gentle compression.
+# Loudness is then set with a measured, LINEAR gain (two passes), so the level never
+# pumps up and down the way single-pass dynamic loudnorm can.
+VOICE_FILTERS = ",".join([
     "highpass=f=80",
     "afftdn=nr=10:nf=-40",
     "equalizer=f=200:t=q:w=1.2:g=-2",
     "equalizer=f=3200:t=q:w=1.0:g=3",
     "acompressor=threshold=-22dB:ratio=2.5:attack=15:release=250:makeup=2",
-    "loudnorm=I=-16:TP=-1.5:LRA=11",
 ])
+LOUDNESS = "I=-16:TP=-1.5:LRA=11"
 
 
 def clean_voice(src: Path, dst: Path, duration: float = 0, on_progress=lambda f: None) -> None:
     """Writes a cleaned, loudness-balanced 48 kHz stereo WAV of the whole source."""
-    run_with_progress(["ffmpeg", "-y", "-i", str(src), "-vn", "-af", VOICE_CHAIN,
+    import json
+    import re
+    import subprocess
+    # Pass 1: measure the loudness after cleanup.
+    proc = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(src), "-vn", "-af",
+                           f"{VOICE_FILTERS},loudnorm={LOUDNESS}:print_format=json", "-f", "null", "-"],
+                          capture_output=True, text=True)
+    norm = f"loudnorm={LOUDNESS}"
+    m = re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", proc.stderr)
+    if m:
+        j = json.loads(m.group(0))
+        try:
+            if float(j["input_i"]) > -70:  # skip for silent clips
+                norm = (f"loudnorm={LOUDNESS}:measured_I={j['input_i']}:measured_TP={j['input_tp']}"
+                        f":measured_LRA={j['input_lra']}:measured_thresh={j['input_thresh']}"
+                        f":offset={j['target_offset']}:linear=true")
+        except (KeyError, ValueError):
+            pass
+    # Pass 2: apply cleanup + one steady gain.
+    run_with_progress(["ffmpeg", "-y", "-i", str(src), "-vn", "-af", f"{VOICE_FILTERS},{norm}",
                        "-ar", "48000", "-ac", "2", str(dst)], duration, on_progress)
 
 

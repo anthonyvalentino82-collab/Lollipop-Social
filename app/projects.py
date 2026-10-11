@@ -238,10 +238,18 @@ def auto_edit(pid: str, progress) -> dict:
     # Pauses between sentences that "remove pauses" can cut out.
     full = {"start": 0, "end": p["source"]["duration"]}
     if words:
-        pauses = pause_cuts(words, full)
+        candidates = pause_cuts(words, full, min_gap=0.8, pad=0.25)
     else:
-        pauses = [{"start": round(a + 0.15, 3), "end": round(b - 0.15, 3)}
-                  for a, b in audio_mod.detect_silences(d / "voice16k.wav") if b - a > 0.6]
+        candidates = [{"start": 0.0, "end": p["source"]["duration"]}]
+    # Word timings from transcription can be off by a few tenths of a second, so only cut
+    # where the audio itself is quiet, keeping 0.25 s of breathing room on each side.
+    silences = audio_mod.detect_silences(d / "voice16k.wav", min_len=0.6, noise_db=-38)
+    pauses = []
+    for c in candidates:
+        for a, b in silences:
+            s0, s1 = max(c["start"], a + 0.25), min(c["end"], b - 0.25)
+            if s1 - s0 >= 0.35:
+                pauses.append({"start": round(s0, 3), "end": round(s1, 3)})
 
     progress(0.65, "Choosing B-roll")
     broll = []
