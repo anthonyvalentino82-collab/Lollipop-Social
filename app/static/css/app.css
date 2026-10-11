@@ -779,3 +779,19 @@ body.cam-open { overflow: hidden; }
   box-shadow: 0 0 0 1.5px #ffd54a, 0 0 16px rgba(212,136,12,.5), 0 8px 22px rgba(0,0,0,.35); }
 .hbtn-cont { background-image: linear-gradient(110deg, #ffd600 0%, #fff176 40%, #ffab00 75%, #ffd600 100%);
   box-shadow: 0 0 0 1.5px rgba(255,255,255,.6), 0 0 18px rgba(255,214,0,.55), 0 8px 22px rgba(255,171,0,.4); }
+
+/* Slim start buttons so all four fit on screen without scrolling */
+.hero-btns { gap: 8px; margin-top: 10px; }
+.hbtn, .hbtn-ai { padding: 7px 14px; border-radius: 16px; gap: 12px; }
+.hbtn .hbtn-ico, .hbtn-ai .hbtn-ico { width: 36px; height: 36px; font-size: 21px; border-radius: 11px; }
+.hbtn .hbtn-txt, .hbtn-ai .hbtn-txt { font-size: 16.5px; }
+.hbtn-txt small { font-size: 11.5px; margin-top: 1px; }
+/* Tighter start page so the four buttons are visible without scrolling */
+.hero { gap: 7px; }
+.orbit { width: min(240px, 26svh); }
+.share-row { flex-wrap: nowrap; gap: 4px; max-width: 100%; }
+.share-row span { font-size: 11px; padding: 4px 7px; white-space: nowrap; }
+.orbit { width: min(230px, 22svh); }
+.hbtn, .hbtn-ai { padding: 5px 12px; }
+.hbtn .hbtn-ico, .hbtn-ai .hbtn-ico { width: 33px; height: 33px; font-size: 19px; }
+.share-row { gap: 3px; } .share-row span { font-size: 10.5px; padding: 3px 6px; }
