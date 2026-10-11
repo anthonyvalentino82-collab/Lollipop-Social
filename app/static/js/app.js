@@ -416,14 +416,9 @@ async function camStart() {
   camStop();
   const portrait = window.innerHeight >= window.innerWidth;
   // Raw microphone: our own audio cleanup does a better job than the phone-call filters.
-  // Prefer the iPhone's own microphone: Bluetooth earbuds (AirPods) switch to a low-quality
-  // "phone call" mic when a web page records, which sounds choppy and cuts in and out.
-  const audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
-  try {
-    const mics = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
-    const builtIn = mics.find((d) => /iphone|built-?in|internal/i.test(d.label) && !/airpod|bluetooth|headset|beats/i.test(d.label));
-    if (builtIn && builtIn.deviceId) audio.deviceId = { exact: builtIn.deviceId };
-  } catch (e) { /* device list unavailable: use the default mic */ }
+  // Use iPhone's normal microphone processing. Turning it off (echoCancellation/noiseSuppression/
+  // autoGainControl: false) triggers a Safari bug where the mic feed glitches and drops out.
+  const audio = true;
   // iPhone Safari interprets width/height in the camera sensor's (landscape) orientation in
   // some versions and in the screen's orientation in others. Asking the wrong way round
   // returns a cropped, zoomed-in feed, so try both and keep the one that matches the phone.
@@ -504,7 +499,7 @@ $("camRec").addEventListener("click", () => {
   if (cam.rec) { cam.rec.stop(); return; }
   const mimeType = camMime();
   cam.chunks = [];
-  const rec = new MediaRecorder(cam.stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 12_000_000, audioBitsPerSecond: 192_000 });
+  const rec = new MediaRecorder(cam.stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 192_000 });
   cam.rec = rec;
   rec.ondataavailable = (e) => { if (e.data && e.data.size) cam.chunks.push(e.data); };
   rec.onstop = () => {
