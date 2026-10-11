@@ -29,6 +29,12 @@ export class Preview {
     this.gesture = null;
     this.audio = null;
 
+    // iPhone Safari stops decoding the picture of a video that isn't on the page (the sound and
+    // the clock keep going, so the speaker "freezes" while captions keep moving). Keep the main
+    // video inside the preview, hidden underneath the canvas, like the B-roll players.
+    video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover";
+    this.holder().appendChild(video);
+
     const redraw = () => this.draw(true);
     video.addEventListener("seeked", redraw);
     video.addEventListener("loadeddata", redraw);
@@ -57,14 +63,20 @@ export class Preview {
     this.draw();
   }
 
-  setBroll(list, base) {
-    // iPhone Safari won't play videos that are off-screen or invisible, so the
-    // B-roll players sit inside the preview, hidden underneath the canvas.
+  // Players live inside the preview, underneath the canvas (iPhone won't decode hidden videos).
+  holder() {
     const holder = document.getElementById("brollHolder") || Object.assign(document.createElement("div"), { id: "brollHolder" });
     holder.style.cssText = "position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none";
     if (holder.parentElement !== this.canvas.parentElement) this.canvas.parentElement.insertBefore(holder, this.canvas);
     this.canvas.style.position = "relative";
     this.canvas.style.zIndex = "1";
+    return holder;
+  }
+
+  setBroll(list, base) {
+    // iPhone Safari won't play videos that are off-screen or invisible, so the
+    // B-roll players sit inside the preview, hidden underneath the canvas.
+    const holder = this.holder();
     for (const [id, v] of Object.entries(this.brollVids)) {
       if (!list.find((b) => b.id === id)) { v.pause(); v.remove(); delete this.brollVids[id]; }
     }
