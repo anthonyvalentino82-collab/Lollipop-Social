@@ -253,28 +253,52 @@ function setSize(sz) {
   const k = SIZES.indexOf(sz);
   for (const id of ["sizeSmaller", "sizeSmaller2"]) $(id).disabled = k <= 0;
   for (const id of ["sizeBigger", "sizeBigger2"]) $(id).disabled = k >= SIZES.length - 1;
+  fitStage();
   preview.draw();
   placeSizeHint();
   setTimeout(placeSizeHint, 260); // after the resize animation
 }
-// While editing, the video fills exactly the space between the top of the screen and the
-// edit panel, leaving room for the play bar (measured on the real screen, so the iPhone's
-// status-bar area is accounted for).
+// While editing, the video and the edit panel share the screen below the status bar:
+//   Medium (start) — the video is as big as it can be with the WHOLE panel showing (no scrolling);
+//                    when "More options" opens, the video automatically gets smaller to make room.
+//   Small  — a smaller video, more room for the panel.
+//   Large  — a bigger video; the panel gets shorter and scrolls.
+//   Full screen — just the video.
+// Everything is measured on the real screen, so the iPhone's status-bar area is accounted for
+// and the play bar is never covered.
 function fitStage() {
   const sh = $("sheet");
   const root = document.documentElement.style;
-  if (sh.hidden || !document.body.classList.contains("sheet-open")) { root.removeProperty("--stage-h"); sh.style.maxHeight = ""; return; }
-  const rowTop = document.querySelector(".stage-row").getBoundingClientRect().top;
+  const editing = !sh.hidden && document.body.classList.contains("sheet-open") && state.size !== "full";
+  if (!editing) { root.removeProperty("--stage-h"); root.removeProperty("--stage-wmax"); sh.style.maxHeight = ""; return; }
+  const row = document.querySelector(".stage-row");
+  const rowTop = row.getBoundingClientRect().top;
   const scrub = $("scrub");
-  const scrubH = scrub.hidden ? 0 : Math.max(48, scrub.getBoundingClientRect().height) + 14;
-  // Never let the panel grow over the play bar: keep at least a small video + the play bar.
-  sh.style.maxHeight = "";
-  const cssMax = parseFloat(getComputedStyle(sh).maxHeight) || innerHeight;
-  const minRow = Math.max(160, $("sizeNote").offsetHeight, document.querySelector(".size-side").offsetHeight);
-  const room = innerHeight - rowTop - minRow - scrubH - 12;
-  if (room < cssMax) sh.style.maxHeight = `${Math.max(240, room)}px`;
-  const sheetTop = sh.getBoundingClientRect().top;
-  root.setProperty("--stage-h", `${Math.max(140, Math.floor(sheetTop - rowTop - scrubH - 8))}px`);
+  const scrubH = scrub.hidden ? 0 : Math.max(48, scrub.getBoundingClientRect().height) + 10;
+  const total = innerHeight - rowTop - scrubH - 6; // video + panel share this
+  sh.style.maxHeight = "none";
+  const natural = Math.ceil(sh.getBoundingClientRect().height); // panel with everything showing
+  const minSheet = Math.min(300, total * 0.45); // always keep the step title, a bit of the panel and Back/Next
+  const smallest = 120;
+  // Width available for the video between the note and the buttons (Large hides the note).
+  const side = document.querySelector(".size-side").offsetWidth || 90;
+  const note = Math.max(side, $("sizeNote").offsetWidth || 0);
+  const wNote = row.clientWidth - side - note - 20, wLarge = row.clientWidth - side - 20;
+  const maxH = total - minSheet;
+  const m = Math.max(smallest + 50, Math.min(total - natural, total * 0.55, maxH, (wNote * 16) / 9));
+  const sizes = {
+    s: Math.max(smallest, Math.min(m * 0.65, m - 70)),
+    m,
+    l: Math.min(maxH, (wLarge * 16) / 9, Math.max(m + 90, total * 0.66)),
+  };
+  const wmax = state.size === "l" ? wLarge : wNote;
+  const h = Math.max(smallest, Math.floor(sizes[state.size] || m));
+  root.setProperty("--stage-h", `${h}px`);
+  root.setProperty("--stage-wmax", `${Math.floor(wmax)}px`);
+  // The panel takes everything below the play bar (the row can be taller than the video when the
+  // note/buttons are taller).
+  const rowH = Math.max(h, $("sizeNote").offsetHeight || 0, document.querySelector(".size-side").offsetHeight || 0);
+  sh.style.maxHeight = `${Math.max(200, Math.floor(innerHeight - rowTop - rowH - scrubH - 6))}px`;
 }
 new ResizeObserver(() => {
   const sh = $("sheet");
@@ -282,6 +306,7 @@ new ResizeObserver(() => {
   fitStage();
 }).observe($("sheet"));
 window.addEventListener("resize", fitStage);
+$("sheet").addEventListener("load", () => requestAnimationFrame(fitStage), true); // an image in the panel finished loading
 // "Make video bigger / smaller" buttons beside the video.
 function stepSize(d) {
   const k = Math.max(0, Math.min(SIZES.length - 1, SIZES.indexOf(state.size || "m") + d));
@@ -323,7 +348,7 @@ const cycleSize = (e) => {
 };
 $("sizeBtn").addEventListener("click", cycleSize);
 $("sizeBtnMain").addEventListener("click", cycleSize);
-$("exitFull").addEventListener("click", () => setSize(document.body.classList.contains("sheet-open") ? "s" : "m"));
+$("exitFull").addEventListener("click", () => setSize("m"));
 setSize("m");
 
 // ---------- saving ----------
@@ -1243,7 +1268,6 @@ $("btnClips").addEventListener("click", () => openSheet("clips"));
 function closeSheet() {
   $("sheet").hidden = true;
   document.body.classList.remove("sheet-open");
-  if (state.size === "s") setSize("m");
   placeSizeHint();
   state.sheet = null;
   state.wizard = null;
@@ -1275,11 +1299,12 @@ function renderSheet({ key, title, step, content, footer }) {
   if (footer) foot.append(...footer.filter(Boolean));
   preview.ghostCaptions = key === "captions";
   window.scrollTo({ top: 0, behavior: "smooth" });
-  if (!document.body.classList.contains("sheet-open") || state.size === "full") setSize("s");
+  if (!document.body.classList.contains("sheet-open") || state.size === "full") setSize("m");
   document.body.classList.add("sheet-open");
   $("sheet").hidden = false; // no backdrop: the preview stays draggable while a panel is open
   [60, 300, 700].forEach((ms) => setTimeout(placeSizeHint, ms));
   requestAnimationFrame(fitStage);
+  [250, 800, 1600].forEach((ms) => setTimeout(fitStage, ms)); // pictures/filmstrips that load in late
   preview.draw();
 }
 
@@ -1353,8 +1378,8 @@ function slider(label, { min, max, step = 1, value, fmt: f = (v) => v, oninput }
 }
 // Advanced settings stay tucked away so each step shows just a few big choices.
 const MORE_HINTS = {
-  trim: "fine-tune, cut out the middle", captions: "size, font, fix a word", headline: "colors, size, fonts",
-  logo: "size, see-through, save default", music: "auto-lower, voice cleanup",
+  trim: "fine-tune, cut out the middle", captions: "font, fix a word", headline: "colors, fonts, cut-out",
+  logo: "see-through, save default", music: "auto-lower, voice cleanup",
 };
 function more(open, ...kids) {
   const hint = MORE_HINTS[state.wizard != null ? STEPS[state.wizard]?.key : state.sheet];
@@ -1653,9 +1678,9 @@ function logoSheet() {
     el("p", { class: "note" }, "Tap one of your logos, or “+ Add logo” to save a new one from your phone for this and future videos."),
     grid,
     chips("Where?", [["tl", "↖"], ["top", "Top"], ["tr", "↗"], ["bl", "↙"], ["bottom", "Bottom"], ["br", "↘"]], null, (v) => { [l.x, l.y] = pos[v]; changed(); }),
+    slider("Size", { min: 0.06, max: 0.9, step: 0.01, value: l.w ?? 0.3, fmt: (v) => `${Math.round(v * 100)}%`, oninput: (v) => { l.w = v; changed(); } }),
     more(recall("lp_more_logo"),
     el("p", { class: "note" }, "Drag the logo on the video to move it, pinch to resize. A PNG with a see-through background looks best."),
-    slider("Size", { min: 0.06, max: 0.9, step: 0.01, value: l.w ?? 0.3, fmt: (v) => `${Math.round(v * 100)}%`, oninput: (v) => { l.w = v; changed(); } }),
     slider("Opacity", { min: 0.2, max: 1, step: 0.05, value: l.opacity ?? 1, fmt: (v) => `${Math.round(v * 100)}%`, oninput: (v) => { l.opacity = v; changed(); } }),
     el("button", { class: "small-btn wide", onclick: async () => {
       state.settings = await api("/api/settings", { method: "PUT", json: { defaultLogo: l.id, logoDefaults: { x: l.x, y: l.y, w: l.w, opacity: l.opacity ?? 1 } } });
@@ -1797,8 +1822,8 @@ function captionsStep() {
       chips("Where on screen?", [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]],
         s.y < 0.35 ? "top" : s.y < 0.6 ? "middle" : "bottom",
         (v) => { s.y = { top: 0.2, middle: 0.5, bottom: 0.72 }[v]; s.x = 0.5; changed(); }),
+      slider("Size", { min: 32, max: 140, value: s.size || 66, oninput: (v) => { s.size = v; changed(); } }),
       more(recall("lp_more_captions"),
-        slider("Size", { min: 32, max: 140, value: s.size || 66, oninput: (v) => { s.size = v; changed(); } }),
         fontPicker("Font", FONTS_CAPTION, s.font, (v) => { s.font = v; changed(); }),
         (c.lines || []).length ? el("div", { class: "field" }, el("label", { class: "label" }, "Fix a misspelled word"), captionLinesList()) : null));
   }
@@ -1840,8 +1865,8 @@ function headlineStep() {
       on: h.font === pr.font,
       onpick: () => { Object.assign(h, { font: pr.font, color: pr.color, accent: pr.accent, block: pr.block, uppercase: pr.font !== "Lobster" }); changed(); refreshSheet(); },
     }))),
+    slider("Size", { min: 50, max: 320, value: h.size || 130, oninput: (v) => { h.size = v; changed(); } }),
     more(recall("lp_more_headline"),
-      slider("Size", { min: 50, max: 320, value: h.size || 130, oninput: (v) => { h.size = v; changed(); } }),
       swatches("Color", HEADLINE_PALETTE, h.color, (v) => { h.color = v; changed(); }),
       swatches("*Starred* word color", HEADLINE_PALETTE, h.accent, (v) => { h.accent = v; changed(); }),
       fontPicker("Font", FONTS_HEADLINE, h.font, (v) => { h.font = v; changed(); }),

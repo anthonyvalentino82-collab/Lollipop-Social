@@ -969,3 +969,13 @@ body.sheet-open .size-note, body.sheet-open .size-side { align-self: center; }
 .tp-edit-head h3 { margin: 0; }
 .tp-back { flex: none; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(242,194,48,.55); background: rgba(255,255,255,.08); color: #fff; font-family: inherit; font-weight: 800; font-size: 16px; line-height: 1; cursor: pointer; }
 .tp-back:active { transform: scale(.96); }
+/* Video size while editing: Small / Medium / Large really change size (heights come from fitStage) */
+body.sheet-open[data-size="s"] .stage,
+body.sheet-open[data-size="m"] .stage,
+body.sheet-open[data-size="l"] .stage { width: min(var(--stage-wmax, calc(100vw - 210px)), calc(var(--stage-h, 40svh) * 9 / 16)); min-width: 0; }
+body.sheet-open[data-size="l"] .size-note { display: none; }
+body.sheet-open[data-size="l"] .stage-row { grid-template-columns: 0 auto auto; justify-content: center; }
+body.sheet-open[data-size] .sheet:not(.tall) { max-height: none; }
+/* logos always sit inside their box */
+.logo-opt { overflow: visible; }
+.logo-opt img { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); max-width: none; max-height: none; object-fit: contain; }
