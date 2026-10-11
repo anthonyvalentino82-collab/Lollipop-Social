@@ -640,3 +640,6 @@ body.cam-open { overflow: hidden; }
 .atom .ring-path { fill: none; stroke: url(#ringGrad); stroke-width: 1.4; opacity: .9; filter: drop-shadow(0 0 3px rgba(242,194,48,.6)); }
 .orbit-core { z-index: 1; }
 @media (prefers-reduced-motion: reduce) { .planet, .atom { animation: none; } }
+/* Centre the logo without depending on the image having loaded (its height is unknown until then). */
+.orbit-core { left: 32%; top: 32%; width: 36%; height: 36%; aspect-ratio: 1; object-fit: contain; transform: none; animation: coreBob2 4s ease-in-out infinite; }
+@keyframes coreBob2 { 50% { translate: 0 -4%; rotate: -4deg; } }
