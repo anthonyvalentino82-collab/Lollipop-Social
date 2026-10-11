@@ -125,6 +125,20 @@ def filmstrip(src: Path, dst: Path, duration: float, count: int = 10, w: int = 7
     Image.fromarray(np.hstack(frames)).save(dst, quality=80)
 
 
+def frozen_at(src: Path, duration: float, min_len: float = 3.0) -> float | None:
+    """If the picture freezes and stays frozen until the end (camera stopped sending frames
+    while the sound kept recording), return the time it froze; otherwise None."""
+    import re
+    proc = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(src), "-an", "-vf",
+                           f"scale=160:-2,freezedetect=n=0.002:d={min_len}", "-f", "null", "-"],
+                          capture_output=True, text=True)
+    starts = [float(x) for x in re.findall(r"freeze_start: ([\d.]+)", proc.stderr)]
+    ends = [float(x) for x in re.findall(r"freeze_end: ([\d.]+)", proc.stderr)]
+    if starts and len(ends) < len(starts) and duration - starts[-1] >= min_len:
+        return starts[-1]
+    return None
+
+
 def thumbnail(src: Path, dst: Path, t: float = 0.5, width: int = 240) -> None:
     run(["ffmpeg", "-y", "-ss", str(t), "-i", str(src), "-frames:v", "1",
          "-vf", f"scale={width}:-2", "-q:v", "4", str(dst)])

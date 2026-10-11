@@ -354,7 +354,7 @@ function markTools() {
 }
 
 function renderWarnings() {
-  const w = state.project?.warnings || [];
+  const w = [...(state.project?.sourceWarnings || []), ...(state.project?.warnings || [])];
   $("warnings").hidden = !w.length;
   $("warnings").textContent = w.join("  •  ");
 }
@@ -520,6 +520,20 @@ $("camRec").addEventListener("click", () => {
   cam.chunks = [];
   const rec = new MediaRecorder(cam.stream, { ...(mimeType ? { mimeType } : {}), videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 192_000 });
   cam.rec = rec;
+  // Watchdog: warn right away if the camera stops sending pictures while recording.
+  const vtrack = cam.stream.getVideoTracks()[0];
+  const view = $("camView");
+  let lastFrameAt = performance.now();
+  const onFrame = () => { lastFrameAt = performance.now(); if (cam.rec === rec && view.requestVideoFrameCallback) view.requestVideoFrameCallback(onFrame); };
+  if (view.requestVideoFrameCallback) view.requestVideoFrameCallback(onFrame);
+  const stalled = () => { $("camMic").hidden = false; $("camMic").classList.add("warn");
+    $("camMic").textContent = "⚠️ The camera stopped sending video. Tap stop and record again."; };
+  vtrack.addEventListener("ended", stalled, { once: true });
+  vtrack.addEventListener("mute", stalled, { once: true });
+  cam.watch = setInterval(() => {
+    if (cam.rec !== rec) { clearInterval(cam.watch); return; }
+    if (view.requestVideoFrameCallback && performance.now() - lastFrameAt > 2500) stalled();
+  }, 1000);
   rec.ondataavailable = (e) => { if (e.data && e.data.size) cam.chunks.push(e.data); };
   rec.onstop = () => {
     const type = rec.mimeType || mimeType || "video/mp4";
