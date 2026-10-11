@@ -179,10 +179,14 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
                     broll_dec.close()
                     broll_dec, broll_cur = None, None
                 x, y, w, h = crop_rect(sw, sh, zoom, track, t)
-                sx, sy = W / w, H / h
-                m = np.float32([[sx, 0, -x * sx], [0, sy, -y * sy]])
-                frame = cv2.warpAffine(src_frame, m, (W, H), flags=cv2.INTER_LINEAR,
-                                       borderMode=cv2.BORDER_REPLICATE)
+                if x <= 0.01 and y <= 0.01 and w >= sw - 0.01 and h >= sh - 0.01:
+                    frame = cv2.resize(src_frame, (W, H), interpolation=cv2.INTER_LINEAR)
+                else:
+                    # Cut out the zoomed area (sub-pixel accurate, so zooms stay smooth), then
+                    # scale it up: ~5x faster than a general warp, same picture.
+                    pw, ph = max(2, int(round(w))), max(2, int(round(h)))
+                    patch = cv2.getRectSubPix(src_frame, (pw, ph), (x + w / 2 - 0.5, y + h / 2 - 0.5))
+                    frame = cv2.resize(patch, (W, H), interpolation=cv2.INTER_LINEAR)
                 if head_np is not None:
                     x0, y0, x1, y1 = head_box
                     rgb, a = head_np

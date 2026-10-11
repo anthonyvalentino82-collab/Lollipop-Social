@@ -65,7 +65,8 @@ def _plan_with_claude(lines, duration, clip_tags):
         "signing mortgage papers, handing over house keys, families moving in, U.S. dollar bills, "
         "Wall Street, the Federal Reserve, American city skylines, grocery prices, gas pumps, etc. "
         "Add words like 'american', 'usa' or 'suburban' when they help find U.S.-looking footage. "
-        "Avoid generic or foreign-looking scenes.\n\n"
+        "Avoid generic or foreign-looking scenes, and avoid words with other meanings (say 'homebuyers' "
+        "or 'married homeowners', not just 'couple', which also finds animals).\n\n"
         f"Rules: at most {max_moments} moments; skip the first 2 seconds (viewers need to see the "
         "speaker's face first); each moment spans 1-3 consecutive caption lines (about 2-4 seconds); "
         "leave at least 4 seconds between moments; B-roll should cover under a third of the video.\n"
@@ -185,6 +186,29 @@ def remember(ids) -> None:
         _HIST.write_text(json.dumps(hist[-5000:]))
 
 
+# Words too general to prove a clip matches (a pair of ducks is also a "couple").
+GENERIC = set("""couple couples people person man men woman women young old happy new american usa us america
+united states family families group adult adults kid kids child children beautiful closeup close up shot
+video footage background view modern""".split())
+# Never show these unless the search itself asks for them.
+OFF_TOPIC = set("""animal animals bird birds duck ducks dog dogs cat cats wildlife insect insects fish horse horses cow
+cows chicken chickens butterfly bee bees pet pets zoo jungle safari""".split())
+
+
+def _words(text: str) -> set[str]:
+    return {w.rstrip("s") if len(w) > 3 else w for w in re.findall(r"[a-z]+", text.lower())}
+
+
+def relevant(query: str, tags: str) -> bool:
+    """Does a clip's tags/description really match the search? Needs at least one meaningful
+    query word (not just 'couple' or 'american') and nothing off-topic like animals."""
+    q, t = _words(query), _words(tags)
+    if (t & _words(" ".join(OFF_TOPIC))) and not (q & _words(" ".join(OFF_TOPIC))):
+        return False
+    key = q - _words(" ".join(GENERIC)) - _words(" ".join(STOP))
+    return not key or bool(key & t)
+
+
 def search_stock(query: str, exclude: set[str] = frozenset(), alts: list[str] = (),
                  avoid: set[str] = frozenset()) -> dict | None:
     """A fresh clip for `query` (or its alternates) from Pexels and/or Pixabay.
@@ -219,6 +243,8 @@ def _search_pexels(query: str, skip: set[str]) -> list[dict]:
         sid = f"pexels:{video['id']}"
         if sid in skip or video.get("duration", 0) < 2:
             continue
+        if not relevant(query, video.get("url", "").replace("-", " ")):
+            continue
         files = [f for f in video.get("video_files", [])
                  if f.get("file_type") == "video/mp4" and f.get("height") and f.get("width")
                  and f["height"] >= f["width"] and f["height"] >= 1280]
@@ -243,6 +269,8 @@ def _search_pixabay(query: str, skip: set[str]) -> list[dict]:
     for hit in r.json().get("hits", []):
         sid = f"pixabay:{hit['id']}"
         if sid in skip or hit.get("duration", 0) < 2:
+            continue
+        if not relevant(query, hit.get("tags", "")):
             continue
         sizes = [v for v in (hit.get("videos") or {}).values() if v.get("url") and v.get("height")]
         if not sizes:

@@ -1052,31 +1052,40 @@ async function saveVideo() {
     if (!(e instanceof AuthError)) showError("Saving didn't finish", e, saveVideo);
     return;
   }
-  let blob = null;
-  try {
-    busy("Saving to your phone", 0.9);
-    blob = await fetchWithProgress(url, (f, got, total) =>
-      busy(`Saving to your phone (${Math.round(got / 1e6)} of ${Math.round(total / 1e6)} MB)`, 0.9 + 0.1 * f));
-  } catch (e) {
-    console.warn("download failed", e); // still offer the direct link below
-  }
   busy(null);
-  showExport(blob, url);
+  // Show the finished video right away (it streams); the file for Save / Share downloads
+  // in the background, with its progress on the Save button.
+  showExport(null, url);
+  const myUrl = url;
+  fetchWithProgress(url, (f) => { if (state.exportPending === myUrl) setSaveProgress(f); })
+    .then((blob) => { if (state.exportPending === myUrl) showExport(blob, url, true); })
+    .catch((e) => { console.warn("download failed", e); if (state.exportPending === myUrl) showExport(null, url, true, true); });
+}
+function setSaveProgress(f) {
+  const b = document.querySelector("#resultActions .save-wait");
+  if (b) b.textContent = `Getting it ready to save… ${Math.round(f * 100)}%`;
 }
 $("btnSave").addEventListener("click", saveVideo);
 
-function showExport(blob, url) {
-  if (state.exportUrl) URL.revokeObjectURL(state.exportUrl);
-  state.exportUrl = blob ? URL.createObjectURL(blob) : null;
+function showExport(blob, url, refresh = false, failed = false) {
+  // refresh: the background download finished — just update the buttons, keep the video playing.
+  const pending = !blob && !failed && !refresh;
+  state.exportPending = pending ? url : null;
   const file = blob ? new File([blob], "lollipop-video.mp4", { type: "video/mp4" }) : null;
   const canShare = !!(file && navigator.canShare && navigator.canShare({ files: [file] }));
   closeSheet();
   preview.pause();
   const v = $("resultVideo");
-  v.src = state.exportUrl || url;
+  if (!refresh) {
+    if (state.exportUrl) URL.revokeObjectURL(state.exportUrl);
+    state.exportUrl = null;
+    v.src = url;
+  }
   const acts = $("resultActions");
   acts.innerHTML = "";
-  if (canShare) {
+  if (pending) {
+    acts.append(el("button", { class: "btn btn-primary save-wait", disabled: true }, "Getting it ready to save… 0%"));
+  } else if (canShare) {
     acts.append(el("button", {
       class: "btn btn-primary", onclick: async () => {
         v.pause();
@@ -1085,7 +1094,9 @@ function showExport(blob, url) {
       },
     }, "Save to iPhone / Share"));
   }
-  acts.append(socialBubbles(file, url, v));
+  const bubbles = socialBubbles(file, url, v);
+  if (pending) bubbles.classList.add("waiting");
+  acts.append(bubbles);
   acts.append(
     el("p", { class: "note center" }, canShare
       ? "Then choose “Save Video” for Photos — or send to Messages, Instagram, TikTok, Facebook, LinkedIn or YouTube."
@@ -1094,7 +1105,7 @@ function showExport(blob, url) {
     el("button", { class: "btn result-done", onclick: closeToStart }, "✅ All done — back to start"));
   $("result").hidden = false;
   document.body.classList.add("result-open");
-  v.play().catch(() => {}); // starts right away when allowed; otherwise tap ▶
+  if (!refresh) v.play().catch(() => {}); // starts right away when allowed; otherwise tap ▶
 }
 
 // Instagram / TikTok / Facebook bubbles: save the video, then jump into the app.
@@ -1158,6 +1169,7 @@ function closeToStart() {
 }
 $("resultClose").addEventListener("click", closeToStart);
 $("resultBack").addEventListener("click", () => {
+  state.exportPending = null; // a background download finishing later shouldn't reopen this screen
   $("resultVideo").pause();
   $("result").hidden = true;
   document.body.classList.remove("result-open");
