@@ -200,7 +200,7 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
                     if seg is not None:
                         # Fresh cut-out on every frame: reusing one across frames makes the
                         # edge lag behind head movement and look blurry.
-                        person = seg.mask(frame, head_box)
+                        person = seg.mask(frame, head_box, fresh=jumped)
                         a = a * (1 - person)
                     _blend(frame, rgb, a, x0, y0)
 

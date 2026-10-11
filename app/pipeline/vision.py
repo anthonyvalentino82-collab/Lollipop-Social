@@ -38,8 +38,17 @@ class PersonSegmenter:
             output_confidence_masks=True, output_category_mask=False))
         self._prev = {}
         self._smoothing = smoothing
+        # "Spill guard" for the fast model: on dark backgrounds it sometimes marks dark areas next
+        # to the head (cabinets, car interior) as person, hiding headline letters in empty space.
+        # A few times a second the detailed model checks where the person really is, and anything
+        # well outside that is dropped. Cheap: one pass on ~1 frame in 8.
+        self._guard_seg = None if best else vision.ImageSegmenter.create_from_options(vision.ImageSegmenterOptions(
+            base_options=BaseOptions(model_asset_path=str(config.MODELS_DIR / "selfie_multiclass_256x256.tflite")),
+            running_mode=vision.RunningMode.IMAGE, output_confidence_masks=True, output_category_mask=False))
+        self._guard, self._guard_age, self._guard_key = None, 99, None
+        self.guard_every = 8
 
-    def mask(self, bgr: np.ndarray, box: tuple[int, int, int, int] | None = None) -> np.ndarray:
+    def mask(self, bgr: np.ndarray, box: tuple[int, int, int, int] | None = None, fresh: bool = False) -> np.ndarray:
         """Person mask for the `box` (x0, y0, x1, y1) region of the frame (whole frame if None)."""
         import math
         h, w = bgr.shape[:2]
@@ -70,7 +79,31 @@ class PersonSegmenter:
             if ox1 > ox0 and oy1 > oy0:
                 dst = out[oy0 - y0:oy1 - y0, ox0 - x0:ox1 - x0]
                 np.maximum(dst, m[oy0 - sy:oy1 - sy, ox0 - sx:ox1 - sx], out=dst)
+        if self._guard_seg is not None:
+            key = (box, bw, bh)
+            if fresh or self._guard is None or self._guard_key != key or self._guard_age >= self.guard_every:
+                self._guard = self._spill_guard(bgr, x0, y0, x1, y1)
+                self._guard_age, self._guard_key = 0, key
+            self._guard_age += 1
+            out *= self._guard
         return out
+
+    def _spill_guard(self, bgr, x0, y0, x1, y1) -> np.ndarray:
+        """Where the detailed model sees the person (hair included), grown by a margin that covers
+        movement until the next check, with a soft edge so nothing gets clipped harshly.
+        One pass over the whole headline area: it only needs to be roughly right."""
+        bw, bh = x1 - x0, y1 - y0
+        small = cv2.cvtColor(cv2.resize(bgr[y0:y1, x0:x1], (256, 256), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2RGB)
+        res = self._guard_seg.segment(mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(small)))
+        g = 1.0 - res.confidence_masks[0].numpy_view().reshape(256, 256).astype(np.float32)
+        side = min(bw, bh)
+        # Grow + soften at quarter size (the guard only needs to be roughly right), then scale up.
+        q = 4
+        small = cv2.resize((g > 0.35).astype(np.float32), (max(1, bw // q), max(1, bh // q)), interpolation=cv2.INTER_LINEAR)
+        r = max(2, int(side * 0.022 / q))  # ~25 px on a 1080 video: plenty for normal head movement between checks
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))
+        small = cv2.GaussianBlur(cv2.dilate((small > 0.05).astype(np.float32), k), (0, 0), max(1.0, r / 3))
+        return cv2.resize(small, (bw, bh), interpolation=cv2.INTER_LINEAR)
 
     def _square(self, bgr: np.ndarray, sx: int, sy: int, side: int, idx: int) -> np.ndarray:
         crop = bgr[sy:sy + side, sx:sx + side]
@@ -96,9 +129,12 @@ class PersonSegmenter:
 
     def reset(self):
         self._prev = {}
+        self._guard = None
 
     def close(self):
         self._seg.close()
+        if self._guard_seg is not None:
+            self._guard_seg.close()
 
 
 def face_track(video: Path, width: int, height: int, duration: float, step: float = 0.25,

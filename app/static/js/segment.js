@@ -15,6 +15,21 @@ async function load() {
   catch { return await ImageSegmenter.createFromOptions(fileset, opts("CPU")); }
 }
 
+// The detailed model: loaded quietly in the background after the fast one. It finds hair and
+// shoulders reliably on dark backgrounds, so it's used as a "spill guard" — anything the fast
+// model marks well outside the person (dark cabinets, a car interior) is dropped.
+let guardSeg = null, guardLoading = null;
+async function loadGuard() {
+  const { FilesetResolver, ImageSegmenter } = await import("/static/vendor/mediapipe/vision_bundle.mjs");
+  const fileset = await FilesetResolver.forVisionTasks("/static/vendor/mediapipe/wasm");
+  const opts = (delegate) => ({
+    baseOptions: { modelAssetPath: "/static/vendor/mediapipe/selfie_multiclass_256x256.tflite", delegate },
+    runningMode: "IMAGE", outputConfidenceMasks: true, outputCategoryMask: false,
+  });
+  try { return await ImageSegmenter.createFromOptions(fileset, opts("GPU")); }
+  catch { return await ImageSegmenter.createFromOptions(fileset, opts("CPU")); }
+}
+
 export class PersonMasker {
   constructor() {
     this.input = document.createElement("canvas");
@@ -34,13 +49,41 @@ export class PersonMasker {
       if (!loading) loading = load();
       segmenter = await loading;
       this.ready = true;
+      if (!guardLoading) guardLoading = loadGuard().then((g) => (guardSeg = g)).catch((e) => console.warn("guard model unavailable", e));
     } catch (e) {
       console.warn("Segmentation unavailable in this browser", e);
       this.failed = true;
     }
   }
 
-  reset() { this.prevs = []; }
+  reset() { this.prevs = []; this.guard = null; }
+
+  // Where the detailed model sees the person, grown by a margin (head movement until the next
+  // check) and softened. Returned at mask resolution (w x h), 0..1.
+  guardMask(source, r, w, h) {
+    if (!guardSeg) return null;
+    const g = this.gdraw || (this.gdraw = document.createElement("canvas"));
+    g.width = 256; g.height = 256;
+    const gc = g.getContext("2d", { willReadFrequently: true });
+    gc.drawImage(source, r.x, r.y, r.w, r.h, 0, 0, 256, 256);
+    let bg = null, gw = 0, gh = 0;
+    guardSeg.segment(g, (result) => {
+      const m = result.confidenceMasks && result.confidenceMasks[0];
+      if (!m) return;
+      gw = m.width; gh = m.height; bg = new Float32Array(m.getAsFloat32Array());
+    });
+    if (!bg) return null;
+    const N = w * h, out = new Float32Array(N), tmp = new Float32Array(N), blur = new Float32Array(N);
+    for (let y = 0; y < h; y++) {
+      const my = Math.min(gh - 1, ((y / h) * gh) | 0);
+      for (let x = 0; x < w; x++) out[y * w + x] = 1 - bg[my * gw + Math.min(gw - 1, ((x / w) * gw) | 0)] > 0.35 ? 1 : 0;
+    }
+    const rad = Math.max(2, Math.round(Math.min(w, h) * 0.022));
+    boxFilter(out, blur, tmp, w, h, rad);            // grow: anything near the person counts
+    for (let i = 0; i < N; i++) out[i] = blur[i] > 0.02 ? 1 : 0;
+    boxFilter(out, blur, tmp, w, h, Math.max(1, rad >> 1)); // soft edge
+    return blur;
+  }
 
   // `source` is a canvas holding exactly the frame that is on screen.
   // rect = {x, y, w, h}: the part of `source` to cut out. The model sees a 256x256 square, so a
@@ -120,6 +163,15 @@ export class PersonMasker {
       box(A, mII); box(B, mIP);
       const a = acc;
       for (let i = 0; i < N; i++) a[i] = Math.max(0, Math.min(1, (mII[i] * I[i] + mIP[i] - 0.4) / 0.25));
+      // Spill guard: refreshed when the picture is paused/jumped and every ~8 updates while playing.
+      if (guardSeg) {
+        this.guardAge = (this.guardAge || 0) + 1;
+        if (!this.guard || this.guard.length !== a.length || this.guardAge >= 8) {
+          const gm = this.guardMask(source, r, w, h);
+          if (gm) { this.guard = gm; this.guardAge = 0; }
+        }
+        if (this.guard && this.guard.length === a.length) for (let i = 0; i < a.length; i++) a[i] *= this.guard[i];
+      }
       const px = this.img.data;
       for (let i = 0; i < a.length; i++) px[i * 4 + 3] = a[i] * 255;
       this.mctx.putImageData(this.img, 0, 0);

@@ -415,5 +415,13 @@ def index():
     return FileResponse(config.STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/static/vendor/mediapipe/selfie_multiclass_256x256.tflite")
+def multiclass_model():
+    # The detailed person model (used by the live preview as a "spill guard") — same file the
+    # server uses, so it isn't stored twice.
+    return FileResponse(config.MODELS_DIR / "selfie_multiclass_256x256.tflite",
+                        headers={"Cache-Control": "max-age=31536000"})
+
+
 app.mount("/icons", StaticFiles(directory=config.STATIC_DIR / "icons"), name="icons")
 app.mount("/static", StaticFiles(directory=config.STATIC_DIR), name="static")
