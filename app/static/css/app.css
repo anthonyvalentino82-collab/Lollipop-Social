@@ -942,3 +942,12 @@ body.sheet-open[data-size="l"] .stage { width: min(calc(100vw - 210px), calc((10
 
 .social-row.waiting { opacity: .4; pointer-events: none; }
 .save-wait:disabled { opacity: .85; }
+
+/* finished-video thumbnails orbiting with the labels, gently teetering */
+.ring span.ex-wrap { z-index: 1; }
+.ring .ex { position: absolute; display: block; translate: -50% -50%; animation: orbitSpin 36s linear infinite reverse; }
+.ring .ex img { display: block; width: min(40px, 5svh); aspect-ratio: 9 / 16; object-fit: cover; border-radius: 7px;
+  border: 1.5px solid rgba(255,255,255,.85); box-shadow: 0 6px 16px rgba(0,0,0,.55), 0 0 14px rgba(242,194,48,.35);
+  animation: teeter 3.2s ease-in-out infinite; animation-delay: var(--d, 0s); transform-origin: 50% 85%; }
+@keyframes teeter { 0%, 100% { transform: rotate(-8deg) translateY(0); } 50% { transform: rotate(8deg) translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .ring .ex img { animation: none; } }
