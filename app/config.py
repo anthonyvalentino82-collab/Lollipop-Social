@@ -33,6 +33,8 @@ PEXELS_API_KEY = os.environ.get("PEXELS_API_KEY", "")
 PIXABAY_API_KEY = os.environ.get("PIXABAY_API_KEY", "")
 STOCK_ENABLED = bool(PEXELS_API_KEY or PIXABAY_API_KEY)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+# What the videos are about: steers B-roll toward fitting, American footage.
+BROLL_NICHE = os.environ.get("BROLL_NICHE", "mortgages, real estate, home buying and the U.S. economy")
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-5-5")
 
 OUT_W, OUT_H, OUT_FPS = 1080, 1920, 30

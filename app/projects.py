@@ -295,6 +295,7 @@ def auto_edit(pid: str, progress) -> dict:
         trimmed = [l for l in lines if l["start"] >= p["trim"]["start"] and l["end"] <= p["trim"]["end"]]
         moments, method = broll_mod.plan_moments(trimmed, p["trim"]["end"] - p["trim"]["start"], list(clips))
         used: set[str] = set()
+        before = broll_mod.used_before()  # clips from earlier videos: get fresh ones
         for k, m in enumerate(moments):
             progress(0.7 + 0.25 * k / max(1, len(moments)), f"Downloading B-roll: {m['query']}")
             try:
@@ -302,13 +303,14 @@ def auto_edit(pid: str, progress) -> dict:
                     m["clip_tag"] = ""
                 if not m.get("clip_tag") and not config.STOCK_ENABLED:
                     continue
-                entry = broll_mod.fetch_moment(m, d, clips, used)
+                entry = broll_mod.fetch_moment(m, d, clips, used, before)
                 if entry:
                     entry["method"] = method
                     used.add(entry.get("stock_id", ""))
                     broll.append(entry)
             except Exception as exc:
                 warnings.append(f"B-roll '{m['query']}' failed: {exc}")
+        broll_mod.remember([b.get("stock_id", "") for b in broll])
 
     with _lock:
         p = load(pid)
@@ -336,11 +338,14 @@ def swap_broll(pid: str, bid: str, progress) -> dict:
     b = next(x for x in p["broll"] if x["id"] == bid)
     progress(0.2, f"Finding another clip for “{b['query']}”")
     exclude = set(b.get("tried", [])) | {b.get("stock_id", "")}
-    entry = broll_mod.fetch_moment({"start": b["start"], "end": b["end"], "query": b["query"]},
-                                   d, {}, exclude)
+    exclude |= {x.get("stock_id", "") for x in p["broll"]}  # not one already in this video
+    entry = broll_mod.fetch_moment({"start": b["start"], "end": b["end"], "query": b["query"],
+                                    "alts": b.get("alts", [])}, d, {}, exclude, broll_mod.used_before())
     if not entry:
         raise RuntimeError("No other clips found for that topic.")
-    entry["tried"] = sorted(exclude | {entry.get("stock_id", "")})
+    entry["tried"] = sorted(set(b.get("tried", [])) | {b.get("stock_id", ""), entry.get("stock_id", "")})
+    entry["alts"] = b.get("alts", [])
+    broll_mod.remember([entry.get("stock_id", "")])
     with _lock:
         p = load(pid)
         p["broll"] = [entry if x["id"] == bid else x for x in p["broll"]]

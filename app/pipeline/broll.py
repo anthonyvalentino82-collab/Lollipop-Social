@@ -1,7 +1,9 @@
 """Auto B-roll: choose moments from the transcript, then fetch matching footage
 from your own uploaded clips or from Pexels / Pixabay (free, licensed for commercial use)."""
 import json
+import random
 import re
+import threading
 import uuid
 from pathlib import Path
 
@@ -56,12 +58,19 @@ def _plan_with_claude(lines, duration, clip_tags):
     prompt = (
         "You are editing a short vertical talking-head video for social media. Pick moments where "
         "cutting away to B-roll footage would illustrate what the speaker is saying (the voice keeps "
-        "playing). Choose concrete, visual ideas (e.g. 'house keys', 'family moving in', 'city skyline'), "
-        "never abstract words.\n\n"
+        "playing). Choose concrete, visual ideas, never abstract words.\n\n"
+        f"The creator makes videos about {config.BROLL_NICHE} for an American audience. Search terms "
+        "must find footage that looks like the United States and fits that world: American suburban "
+        "homes and neighborhoods, 'for sale' yard signs, real estate agents showing houses, couples "
+        "signing mortgage papers, handing over house keys, families moving in, U.S. dollar bills, "
+        "Wall Street, the Federal Reserve, American city skylines, grocery prices, gas pumps, etc. "
+        "Add words like 'american', 'usa' or 'suburban' when they help find U.S.-looking footage. "
+        "Avoid generic or foreign-looking scenes.\n\n"
         f"Rules: at most {max_moments} moments; skip the first 2 seconds (viewers need to see the "
         "speaker's face first); each moment spans 1-3 consecutive caption lines (about 2-4 seconds); "
         "leave at least 4 seconds between moments; B-roll should cover under a third of the video.\n"
-        "`query` is a 1-3 word stock-footage search term. "
+        "`query` is a 2-4 word stock-footage search term; `alts` are 2 different search terms for the "
+        "same moment (other angles on the idea), used when the first finds nothing new. "
         + (f"The creator has their own clips tagged: {', '.join(clip_tags)}. If one fits a moment, set "
            "`clip_tag` to that exact tag; otherwise set it to an empty string.\n" if clip_tags else
            "Always set `clip_tag` to an empty string.\n")
@@ -72,8 +81,9 @@ def _plan_with_claude(lines, duration, clip_tags):
         "properties": {"moments": {"type": "array", "items": {
             "type": "object",
             "properties": {"first_line": {"type": "integer"}, "last_line": {"type": "integer"},
-                           "query": {"type": "string"}, "clip_tag": {"type": "string"}},
-            "required": ["first_line", "last_line", "query", "clip_tag"],
+                           "query": {"type": "string"}, "alts": {"type": "array", "items": {"type": "string"}},
+                           "clip_tag": {"type": "string"}},
+            "required": ["first_line", "last_line", "query", "alts", "clip_tag"],
             "additionalProperties": False}}},
         "required": ["moments"], "additionalProperties": False,
     }
@@ -91,7 +101,8 @@ def _plan_with_claude(lines, duration, clip_tags):
         if start < 2.0:
             continue
         tag = m["clip_tag"] if m["clip_tag"] in clip_tags else ""
-        out.append({"start": start, "end": end, "query": m["query"].strip()[:60], "clip_tag": tag})
+        out.append({"start": start, "end": end, "query": m["query"].strip()[:60], "clip_tag": tag,
+                    "alts": [a.strip()[:60] for a in m.get("alts", []) if a.strip()][:3]})
     return _non_overlapping(out)
 
 
@@ -120,7 +131,8 @@ def _plan_with_keywords(lines, duration, clip_tags):
     out = []
     for i, tag, kw in candidates[step // 2::step][:want]:
         start, end = _window(lines, i, i + 1)
-        out.append({"start": start, "end": end, "query": kw, "clip_tag": tag})
+        out.append({"start": start, "end": end, "query": kw, "clip_tag": tag,
+                    "alts": random.sample(NICHE_QUERIES, 3)})
     # Tagged personal clips always win a slot.
     for i, tag, kw in candidates:
         if tag and not any(o["clip_tag"] == tag for o in out):
@@ -138,30 +150,74 @@ def _non_overlapping(moments):
     return out
 
 
-def search_stock(query: str, exclude: set[str] = frozenset()) -> dict | None:
-    """Best clip for `query` from Pexels and/or Pixabay (whichever keys are set).
-    Returns {id, url, link, credit} or None. Ids look like "pexels:123" / "pixabay:456"."""
-    for search in (_search_pexels, _search_pixabay):
+# Fitting, American-looking fallback searches (used when a moment's own terms find nothing new).
+NICHE_QUERIES = [
+    "american suburban house", "for sale sign house", "real estate agent showing house", "couple signing papers",
+    "house keys handover", "family moving boxes", "new home front door", "neighborhood aerial usa",
+    "american flag house porch", "dollar bills counting", "wall street new york", "stock market screen",
+    "federal reserve building", "city skyline usa", "home renovation", "couple calculator bills",
+    "grocery store prices", "gas station pump", "house construction", "luxury home interior",
+    "young family new house", "home inspection", "kitchen remodel", "mortgage documents",
+]
+
+# Clips used in earlier videos, so every new video gets fresh footage.
+_HIST = config.DATA_DIR / "broll_history.json"
+_hist_lock = threading.Lock()
+
+
+def used_before() -> set[str]:
+    try:
+        return set(json.loads(_HIST.read_text()))
+    except (FileNotFoundError, ValueError):
+        return set()
+
+
+def remember(ids) -> None:
+    ids = [i for i in ids if i]
+    if not ids:
+        return
+    with _hist_lock:
         try:
-            hit = search(query, exclude)
-        except httpx.HTTPError as exc:
-            print(f"[broll] {search.__name__} failed: {exc}")
-            hit = None
-        if hit:
-            return hit
+            hist = json.loads(_HIST.read_text())
+        except (FileNotFoundError, ValueError):
+            hist = []
+        hist = [i for i in hist if i not in ids] + ids
+        _HIST.write_text(json.dumps(hist[-5000:]))
+
+
+def search_stock(query: str, exclude: set[str] = frozenset(), alts: list[str] = (),
+                 avoid: set[str] = frozenset()) -> dict | None:
+    """A fresh clip for `query` (or its alternates) from Pexels and/or Pixabay.
+    `exclude`: never use (already in this video / already tried). `avoid`: used in earlier videos —
+    skipped unless nothing else exists. Picks at random among the best matches, so the same words
+    don't always give the same clip. Returns {id, url, link, credit} or None."""
+    for allow_old in (False, True):
+        skip = set(exclude) | (set() if allow_old else set(avoid))
+        for q in [query, *alts]:
+            for search in (_search_pexels, _search_pixabay):
+                try:
+                    cands = search(q, skip)
+                except httpx.HTTPError as exc:
+                    print(f"[broll] {search.__name__} failed: {exc}")
+                    cands = []
+                if cands:
+                    top = cands[:8]  # best matches only, then mix it up
+                    return random.choice(top)
     return None
 
 
-def _search_pexels(query: str, exclude: set[str]) -> dict | None:
+def _search_pexels(query: str, skip: set[str]) -> list[dict]:
     if not config.PEXELS_API_KEY:
-        return None
+        return []
     r = httpx.get("https://api.pexels.com/v1/videos/search",
-                  params={"query": query, "orientation": "portrait", "per_page": 10, "size": "medium"},
+                  params={"query": query, "orientation": "portrait", "per_page": 40, "size": "medium",
+                          "locale": "en-US"},
                   headers={"Authorization": config.PEXELS_API_KEY}, timeout=30)
     r.raise_for_status()
+    out = []
     for video in r.json().get("videos", []):
         sid = f"pexels:{video['id']}"
-        if sid in exclude or video.get("duration", 0) < 2:
+        if sid in skip or video.get("duration", 0) < 2:
             continue
         files = [f for f in video.get("video_files", [])
                  if f.get("file_type") == "video/mp4" and f.get("height") and f.get("width")
@@ -169,24 +225,24 @@ def _search_pexels(query: str, exclude: set[str]) -> dict | None:
         if not files:
             continue
         best = min(files, key=lambda f: abs(f["height"] - 1920))
-        return {"id": sid, "url": best["link"], "link": video.get("url", ""),
-                "credit": f'Video by {video.get("user", {}).get("name", "Pexels")} on Pexels'}
-    return None
+        out.append({"id": sid, "url": best["link"], "link": video.get("url", ""),
+                    "credit": f'Video by {video.get("user", {}).get("name", "Pexels")} on Pexels'})
+    return out
 
 
-def _search_pixabay(query: str, exclude: set[str]) -> dict | None:
+def _search_pixabay(query: str, skip: set[str]) -> list[dict]:
     """Pixabay has few vertical clips, so we take HD landscape ones too; they are
-    centre-cropped to 9:16 when prepared."""
+    centre-cropped to 9:16 when prepared. Vertical clips are listed first."""
     if not config.PIXABAY_API_KEY:
-        return None
+        return []
     r = httpx.get("https://pixabay.com/api/videos/",
-                  params={"key": config.PIXABAY_API_KEY, "q": query[:100], "per_page": 20,
+                  params={"key": config.PIXABAY_API_KEY, "q": query[:100], "per_page": 80,
                           "safesearch": "true", "video_type": "film"}, timeout=30)
     r.raise_for_status()
-    candidates = []
+    portrait, landscape = [], []
     for hit in r.json().get("hits", []):
         sid = f"pixabay:{hit['id']}"
-        if sid in exclude or hit.get("duration", 0) < 2:
+        if sid in skip or hit.get("duration", 0) < 2:
             continue
         sizes = [v for v in (hit.get("videos") or {}).values() if v.get("url") and v.get("height")]
         if not sizes:
@@ -199,13 +255,10 @@ def _search_pixabay(query: str, exclude: set[str]) -> dict | None:
         best = min(good, key=area) if good else max(sizes, key=area)
         if min(best["width"], best["height"]) < 720:
             continue
-        portrait = best["height"] >= best["width"]
-        candidates.append((0 if portrait else 1, {
-            "id": sid, "url": best["url"], "link": hit.get("pageURL", ""),
-            "credit": f'Video by {hit.get("user", "Pixabay")} on Pixabay'}))
-    if not candidates:
-        return None
-    return min(candidates, key=lambda c: c[0])[1]  # prefer vertical, keep Pixabay's relevance order
+        item = {"id": sid, "url": best["url"], "link": hit.get("pageURL", ""),
+                "credit": f'Video by {hit.get("user", "Pixabay")} on Pixabay'}
+        (portrait if best["height"] >= best["width"] else landscape).append(item)
+    return portrait + landscape  # keeps Pixabay's relevance order within each group
 
 
 def prepare_clip(src: Path, dst: Path, length: float) -> None:
@@ -217,19 +270,19 @@ def prepare_clip(src: Path, dst: Path, length: float) -> None:
 
 
 def fetch_moment(moment: dict, project_dir: Path, user_clips: dict[str, Path],
-                 exclude: set[str] = frozenset()) -> dict | None:
+                 exclude: set[str] = frozenset(), avoid: set[str] = frozenset()) -> dict | None:
     """Materialise one moment into a ready-to-render B-roll entry."""
     bdir = project_dir / "broll"
     bdir.mkdir(exist_ok=True)
     bid = uuid.uuid4().hex[:8]
     length = moment["end"] - moment["start"]
-    entry = {"id": bid, "start": moment["start"], "end": moment["end"], "query": moment["query"],
+    entry = {"id": bid, "start": moment["start"], "end": moment["end"], "query": moment["query"], "alts": moment.get("alts", []),
              "removed": False, "file": f"broll/{bid}.mp4", "thumb": f"broll/{bid}.jpg"}
     if moment.get("clip_tag") and moment["clip_tag"] in user_clips:
         prepare_clip(user_clips[moment["clip_tag"]], bdir / f"{bid}.mp4", length + 0.5)
         entry.update(source="mine", credit="Your clip", query=moment["clip_tag"])
     else:
-        hit = search_stock(moment["query"], exclude)
+        hit = search_stock(moment["query"], exclude, moment.get("alts", []), avoid)
         if not hit:
             return None
         raw = bdir / f"{bid}_src.mp4"
