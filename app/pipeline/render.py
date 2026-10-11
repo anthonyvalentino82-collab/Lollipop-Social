@@ -148,6 +148,8 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
     broll_dec, broll_cur = None, None
     cap_cache: dict = {}
     seg_i, last_t = 0, None
+    person, person_at = None, -99
+    seg_every = 3 if head.get("cutout") == "best" else 2
     try:
         for i in range(n_frames):
             t = start + i / FPS
@@ -185,7 +187,10 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
                     x0, y0, x1, y1 = head_box
                     rgb, a = head_np
                     if seg is not None:
-                        person = seg.mask(frame, head_box)
+                        # The cut-out is the slowest step, and people move little between
+                        # frames: refresh it every 2nd frame (every 3rd on "extra sharp").
+                        if person is None or jumped or i - person_at >= seg_every:
+                            person, person_at = seg.mask(frame, head_box), i
                         a = a * (1 - person)
                     _blend(frame, rgb, a, x0, y0)
 
