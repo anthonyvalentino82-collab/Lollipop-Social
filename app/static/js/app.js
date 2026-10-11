@@ -418,7 +418,14 @@ async function camStart() {
   // Raw microphone: our own audio cleanup does a better job than the phone-call filters.
   // Use iPhone's normal microphone processing. Turning it off (echoCancellation/noiseSuppression/
   // autoGainControl: false) triggers a Safari bug where the mic feed glitches and drops out.
-  const audio = true;
+  let audio = true;
+  // In a car (Bluetooth/CarPlay) or with AirPods, iPhone records through the hands-free
+  // "phone call" mic, which sounds choppy and cuts in and out. Ask for the iPhone's own mic.
+  try {
+    const mics = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
+    const builtIn = mics.find((d) => /iphone|built-?in|internal/i.test(d.label));
+    if (builtIn && builtIn.deviceId) audio = { deviceId: { exact: builtIn.deviceId } };
+  } catch (e) { /* use the default mic */ }
   // iPhone Safari interprets width/height in the camera sensor's (landscape) orientation in
   // some versions and in the screen's orientation in others. Asking the wrong way round
   // returns a cropped, zoomed-in feed, so try both and keep the one that matches the phone.
@@ -432,7 +439,13 @@ async function camStart() {
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cam.facing, frameRate: { ideal: 30 }, ...size }, audio });
-    } catch (e) { continue; }
+    } catch (e) {
+      if (audio !== true) { // that mic wasn't available: fall back to the default one
+        audio = true;
+        try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cam.facing, frameRate: { ideal: 30 }, ...size }, audio }); }
+        catch { continue; }
+      } else continue;
+    }
     const st = stream.getVideoTracks()[0].getSettings();
     const w = st.width || 0, h = st.height || 0;
     const matches = portrait ? h >= w : w >= h;
@@ -457,6 +470,12 @@ async function camStart() {
   const w = st.width || v.videoWidth, h = st.height || v.videoHeight;
   // If the feed isn't shaped like the screen, show all of it instead of cropping in.
   v.classList.toggle("fit", portrait ? w > h : h > w);
+  // Show which microphone is recording; warn if it's a car / Bluetooth hands-free mic.
+  const micLabel = best.getAudioTracks()[0]?.label || "";
+  const phoneMic = !micLabel || /iphone|built-?in|internal|default/i.test(micLabel);
+  $("camMic").hidden = false;
+  $("camMic").classList.toggle("warn", !phoneMic);
+  $("camMic").textContent = phoneMic ? "🎙 iPhone mic" : `⚠️ Using “${micLabel}” mic — for clear sound, disconnect Bluetooth / CarPlay`;
   const short = Math.min(w || 0, h || 0);
   $("camQuality").textContent = short ? `${short >= 1080 ? "HD 1080p" : short + "p"} · ${Math.round(st.frameRate || 30)} fps` : "";
 }
