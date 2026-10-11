@@ -42,3 +42,6 @@ OUT_W, OUT_H, OUT_FPS = 1080, 1920, 30
 # quality per MB but is much slower on a 1-CPU server; "veryfast" (the default) saves about 2.4x
 # faster than "medium" at the same CRF, with slightly bigger files.
 EXPORT_PRESET = os.environ.get("EXPORT_PRESET", "veryfast")
+# Threads per ffmpeg encode/decode. Servers often report the host's many CPU cores; letting
+# ffmpeg start a worker (with its own full-HD frames) per reported core runs out of memory.
+FFMPEG_THREADS = os.environ.get("FFMPEG_THREADS", "3")

@@ -148,7 +148,7 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
     enc = subprocess.Popen(
         ["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}",
          "-r", str(FPS), "-i", "-", "-i", str(final_audio), "-map", "0:v", "-map", "1:a",
-         "-c:v", "libx264", "-preset", config.EXPORT_PRESET, "-crf", "18", "-maxrate", "12M", "-bufsize", "24M",
+         "-c:v", "libx264", "-preset", config.EXPORT_PRESET, "-threads", config.FFMPEG_THREADS, "-crf", "18", "-maxrate", "12M", "-bufsize", "24M",
          "-profile:v", "high", "-level", "4.2", "-pix_fmt", "yuv420p", "-c:a", "copy",
          "-movflags", "+faststart", "-shortest", str(out)],
         stdin=subprocess.PIPE, stderr=subprocess.PIPE)

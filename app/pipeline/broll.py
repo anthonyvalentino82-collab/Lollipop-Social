@@ -335,7 +335,7 @@ def prepare_clip(src: Path, dst: Path, length: float) -> None:
     seconds (looping it if it is too short)."""
     run(["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(src), "-t", f"{length:.3f}",
          "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,format=yuv420p",
-         "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-movflags", "+faststart", str(dst)])
+         "-an", "-c:v", "libx264", "-preset", "veryfast", "-threads", config.FFMPEG_THREADS, "-crf", "20", "-movflags", "+faststart", str(dst)])
 
 
 def fetch_moment(moment: dict, project_dir: Path, user_clips: dict[str, Path],

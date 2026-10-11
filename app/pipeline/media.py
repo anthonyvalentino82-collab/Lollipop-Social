@@ -1,7 +1,10 @@
 """Thin wrappers around ffmpeg / ffprobe."""
 import json
+import shutil
 import subprocess
 from pathlib import Path
+
+from .. import config
 
 
 class MediaError(RuntimeError):
@@ -87,8 +90,8 @@ def normalize(src: Path, dst: Path, info: dict, on_progress=lambda f: None) -> N
         vf += ["zscale=t=linear:npl=100", "format=gbrpf32le", "zscale=p=bt709",
                "tonemap=hable:desat=0", "zscale=t=bt709:m=bt709:r=tv"]
     vf.append("format=yuv420p")
-    cmd = ["ffmpeg", "-y", "-i", str(src), "-vf", ",".join(vf),
-           "-c:v", "libx264", "-preset", "veryfast", "-crf", "15",
+    cmd = ["ffmpeg", "-y", "-threads", config.FFMPEG_THREADS, "-i", str(src), "-vf", ",".join(vf),
+           "-c:v", "libx264", "-preset", "veryfast", "-crf", "15", "-threads", config.FFMPEG_THREADS,
            "-movflags", "+faststart"]
     if info["has_audio"]:
         # async resampling fills tiny timestamp gaps (common in browser recordings) instead of
@@ -196,17 +199,35 @@ def stitch_segments(segs: list[Path], offsets: list[float], dst: Path) -> list[f
     for i in range(1, len(segs)):
         prev_end = starts[i - 1] + durs[i - 1]
         cuts.append((starts[i] + min(prev_end, starts[i] + 1.0)) / 2 if prev_end > starts[i] else prev_end)
-    parts, inputs = [], []
-    for i, s in enumerate(segs):
-        g0 = 0.0 if i == 0 else cuts[i - 1]
-        g1 = starts[i] + durs[i] if i == len(segs) - 1 else cuts[i]
-        a, b = max(0.0, g0 - starts[i]), max(0.01, g1 - starts[i])
-        inputs += ["-i", str(s)]
-        parts.append(f"[{i}:v]trim=start={a:.3f}:end={b:.3f},setpts=PTS-STARTPTS,fps=30,format=yuv420p[v{i}];"
-                     f"[{i}:a]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS,aresample=48000[a{i}]")
-    graph = ";".join(parts) + ";" + "".join(f"[v{i}][a{i}]" for i in range(len(segs))) + \
-        f"concat=n={len(segs)}:v=1:a=1[v][a]"
-    run(["ffmpeg", "-y", *inputs, "-filter_complex", graph, "-map", "[v]", "-map", "[a]",
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-c:a", "aac", "-b:a", "192k",
-         "-movflags", "+faststart", str(dst)])
+    # Join one piece at a time with a small, fixed number of threads. (Opening every piece at once
+    # in one ffmpeg filter graph decodes them all in parallel — at full HD, on a server reporting
+    # many CPU cores, that used several GB of memory and got the server restarted.)
+    tmp = dst.parent / f".{dst.stem}_parts"
+    tmp.mkdir(exist_ok=True)
+    try:
+        windows = []
+        for i, s in enumerate(segs):
+            g0 = 0.0 if i == 0 else cuts[i - 1]
+            g1 = starts[i] + durs[i] if i == len(segs) - 1 else cuts[i]
+            windows.append((max(0.0, g0 - starts[i]), max(0.01, g1 - starts[i])))
+        names = []
+        for i, (s, (a, b)) in enumerate(zip(segs, windows)):
+            part = tmp / f"v{i}.mp4"
+            run(["ffmpeg", "-y", "-threads", config.FFMPEG_THREADS, "-ss", f"{a:.3f}", "-i", str(s), "-t", f"{b - a:.3f}",
+                 "-map", "0:v:0", "-an", "-vf", "fps=30,format=yuv420p", "-c:v", "libx264", "-preset", "veryfast",
+                 "-crf", "16", "-threads", config.FFMPEG_THREADS, str(part)])
+            names.append(part)
+        # Sound: cut and joined in one pass (audio is tiny; the video streams aren't decoded).
+        ainputs, aparts = [], []
+        for i, (s, (a, b)) in enumerate(zip(segs, windows)):
+            ainputs += ["-i", str(s)]
+            aparts.append(f"[{i}:a]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS,aresample=48000[a{i}]")
+        graph = ";".join(aparts) + ";" + "".join(f"[a{i}]" for i in range(len(segs))) + f"concat=n={len(segs)}:v=0:a=1[a]"
+        run(["ffmpeg", "-y", *ainputs, "-filter_complex", graph, "-map", "[a]", "-vn",
+             "-c:a", "aac", "-b:a", "192k", str(tmp / "a.m4a")])
+        (tmp / "list.txt").write_text("".join(f"file '{n.name}'\n" for n in names))
+        run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(tmp / "list.txt"), "-i", str(tmp / "a.m4a"),
+             "-map", "0:v:0", "-map", "1:a:0", "-c", "copy", "-shortest", "-movflags", "+faststart", str(dst)])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
     return starts

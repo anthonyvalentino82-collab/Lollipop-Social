@@ -119,7 +119,28 @@ def server_info() -> dict:
     return {"python": platform.python_version(), "ffmpeg": ffv,
             "diskFreeMB": disk.free // 2**20, "transcription": config.TRANSCRIBE_PROVIDER,
             "stock": config.STOCK_ENABLED, "claude": bool(config.ANTHROPIC_API_KEY),
-            "exportPreset": config.EXPORT_PRESET}
+            "exportPreset": config.EXPORT_PRESET, **_machine()}
+
+
+def _machine() -> dict:
+    """CPU count the server reports vs. what it's allowed to use, and memory limit/use (cgroup)."""
+    import os
+    out = {"cpuReported": os.cpu_count()}
+    def read(path):
+        try:
+            return open(path).read().strip()
+        except OSError:
+            return None
+    cpu = read("/sys/fs/cgroup/cpu.max")
+    if cpu and cpu.split()[0] != "max":
+        q, per = cpu.split()
+        out["cpuAllowed"] = round(int(q) / int(per), 2)
+    for key, path in (("memLimitMB", "/sys/fs/cgroup/memory.max"), ("memUsedMB", "/sys/fs/cgroup/memory.current"),
+                      ("memPeakMB", "/sys/fs/cgroup/memory.peak")):
+        v = read(path)
+        if v and v.isdigit():
+            out[key] = int(v) // 2**20
+    return out
 
 
 def save_report(payload: dict) -> str:
