@@ -729,3 +729,38 @@ body.cam-open { overflow: hidden; }
 
 .hero-ai { width: 100%; max-width: 360px; margin: 12px auto 0; padding: 14px 16px 12px; font-size: 20px; }
 .hero-ai small { display: block; font-size: 13px; font-weight: 800; opacity: .95; margin-top: 2px; }
+
+/* ---------- Start-screen buttons (in order: AI script + record, record, library, continue) ---------- */
+.hero-btns { width: 100%; max-width: 400px; margin: 16px auto 0; display: grid; gap: 12px; }
+.hbtn { position: relative; display: flex; align-items: center; gap: 14px; width: 100%; box-sizing: border-box; padding: 14px 18px;
+  border: 0; border-radius: 20px; cursor: pointer; text-align: left; color: #fff; overflow: hidden; font-family: inherit;
+  background-size: 250% 100%; animation: aiShift 6s linear infinite; -webkit-tap-highlight-color: transparent;
+  transition: transform .12s; }
+.hbtn:active { transform: scale(.97); }
+.hbtn::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.28) 50%, transparent 65%); background-size: 250% 100%;
+  animation: hbtnShine 3.8s ease-in-out infinite; }
+.hbtn-ico { flex: 0 0 auto; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 26px;
+  background: rgba(0,0,0,.22); box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+.hbtn-txt { display: flex; flex-direction: column; font-size: 19px; font-weight: 900; line-height: 1.15; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+.hbtn-txt small { font-size: 13px; font-weight: 700; opacity: .92; margin-top: 3px; }
+/* 1 — the top pick: biggest, brightest, glowing */
+.hbtn-ai { padding: 18px 18px; background-image: linear-gradient(110deg, #E3202A 0%, #ff4f7b 35%, #F2C230 70%, #E3202A 100%);
+  box-shadow: 0 0 0 2px rgba(242,194,48,.7), 0 10px 32px rgba(227,32,42,.6); animation: aiShift 4s linear infinite, aiGlow 2s ease-in-out infinite; }
+.hbtn-ai .hbtn-ico { width: 54px; height: 54px; font-size: 32px; animation: aiSpin 3s ease-in-out infinite; }
+.hbtn-ai .hbtn-txt { font-size: 19.5px; }
+.hbtn-ai .hbtn-ico { width: 50px; height: 50px; }
+/* 2 — record, no teleprompter: red → orange */
+.hbtn-rec { background-image: linear-gradient(110deg, #c3121c 0%, #E3202A 30%, #ff7a3d 65%, #c3121c 100%);
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,.18), 0 8px 24px rgba(227,32,42,.4); }
+/* 3 — library: deep maroon with a gold edge */
+.hbtn-lib { background-image: linear-gradient(110deg, #3a0c12 0%, #6b1720 35%, #8a5a12 70%, #3a0c12 100%);
+  box-shadow: 0 0 0 1.5px rgba(242,194,48,.55), 0 8px 22px rgba(0,0,0,.35); }
+/* 4 — continue: gold */
+.hbtn-cont { color: #2a0a0c; background-image: linear-gradient(110deg, #F2C230 0%, #ffe08a 40%, #e9a91e 75%, #F2C230 100%);
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,.35), 0 8px 22px rgba(242,194,48,.35); }
+.hbtn-cont .hbtn-txt { text-shadow: none; }
+.hbtn-cont .hbtn-ico { background: rgba(255,255,255,.35); }
+.hbtn[hidden] { display: none; }
+@keyframes hbtnShine { 0%, 55% { background-position: 150% 0; } 100% { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .hbtn, .hbtn::after, .hbtn-ai .hbtn-ico { animation: none; } }
