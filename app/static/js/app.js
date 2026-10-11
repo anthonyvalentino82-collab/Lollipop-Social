@@ -1376,10 +1376,11 @@ function chips(label, options, current, onpick) {
 }
 // 10 ready-made colors + a color wheel for any custom color.
 const PALETTE_DEFAULT = ["#FFFFFF", "#E9E1D3", "#E3202A", "#F2C230", "#FF7A1A", "#FF3D8B", "#8B5CF6", "#2F80ED", "#14B8A6", "#22C55E"];
-// Headline: white, cream, pale yellow, deep yellow, sunburst orange, bright pink, deep red,
-// Tiffany blue, deep ocean blue, forest green, navy, leather brown, black (+ color wheel = 14, two rows of 7).
-const HEADLINE_PALETTE = ["#FFFFFF", "#F3E9D2", "#FFF1A8", "#F2C230", "#FF8C1A", "#FF3D8B", "#B3121B",
-  "#0ABAB5", "#0B5394", "#1F6B3A", "#14213D", "#7B4A2A", "#111111"];
+// Headline: rich, muted "luxury" tones — white, ivory, champagne, antique gold, burnt copper, berry,
+// oxblood, deep teal (Tiffany family), deep ocean, forest, midnight navy, cognac leather, onyx
+// (+ color wheel = 14, two rows of 7).
+const HEADLINE_PALETTE = ["#FFFFFF", "#EFE6D2", "#E3D3A3", "#C9A227", "#C2602A", "#9E2F57", "#7F1A22",
+  "#2A8C86", "#1D4E6E", "#1E4D36", "#14213D", "#7A4B2A", "#121212"];
 function swatches(label, colors, current, onpick) {
   const PALETTE = colors || PALETTE_DEFAULT;
   const wrap = el("div", { class: `swatches${colors ? " swatches-7" : ""}` });
@@ -1756,9 +1757,9 @@ const CAPTION_PRESETS = [
   { name: "Fun & Curly", style: { font: "Lobster", color: "#FFFFFF", highlight: "#F2C230", highlightStyle: "color", stroke: 6, uppercase: false, animation: "pop", size: 72 } },
 ];
 const HEADLINE_PRESETS = [
-  { name: "Big & Boxy", font: "Anton", color: "#F3E9D2", accent: "#B3121B", block: true },
-  { name: "Thin", font: "Bebas Neue", color: "#FFFFFF", accent: "#F2C230", block: true },
-  { name: "Fun & Curly", font: "Lobster", color: "#FFFFFF", accent: "#F2C230", block: false },
+  { name: "Big & Boxy", font: "Anton", color: "#EFE6D2", accent: "#7F1A22", block: true },
+  { name: "Thin", font: "Bebas Neue", color: "#FFFFFF", accent: "#C9A227", block: true },
+  { name: "Fun & Curly", font: "Lobster", color: "#FFFFFF", accent: "#C9A227", block: false },
 ];
 
 function presetCard({ label, sample, font, color, accent, upper, on, onpick, box = false, boxText = "#FFFFFF" }) {
