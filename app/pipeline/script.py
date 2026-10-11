@@ -105,7 +105,7 @@ def write_script(topic: str, seconds: int) -> dict:
         raise ScriptError("The AI couldn't write about that topic. Try wording it differently.")
     text = "\n".join(b.text for b in resp.content if b.type == "text")
     out = _parse(text)
-    script = "\n\n".join(out[p.lower()] for p in PARTS)
+    script = " ".join(out[p.lower()] for p in PARTS)  # one continuous block, no blank lines
     out.update({"seconds": seconds, "script": script,
                 "words": len(script.split()), "sources": sources[:5]})
     return out

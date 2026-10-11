@@ -640,7 +640,9 @@ $("tpOpen").addEventListener("click", () => {
   setTimeout(() => $("tpInput").focus(), 50);
 });
 $("tpSave").addEventListener("click", () => {
-  store("lp_tp_script", $("tpInput").value.trim() || null);
+  // No blank lines or line breaks: the script is one continuous block of text.
+  const flat = $("tpInput").value.replace(/\s*\n\s*/g, " ").replace(/ {2,}/g, " ").trim();
+  store("lp_tp_script", flat || null);
   store("lp_tp_hidden", null);
   $("tpEdit").hidden = true;
   tpRender(); tpRestart();
@@ -696,7 +698,7 @@ $("aiGo").addEventListener("click", async () => {
   try {
     const r = await api("/api/script", { method: "POST", json: { topic, seconds: ai.seconds } });
     $("aiGoBar").style.width = "100%";
-    $("tpInput").value = r.script; tpCount();
+    $("tpInput").value = r.script.replace(/\s*\n\s*/g, " "); tpCount();
     $("aiResult").hidden = false;
     $("aiResult").replaceChildren(
       el("h4", {}, `✅ ${r.title || "Your script"} · ${r.seconds}s`),
