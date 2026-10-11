@@ -1094,7 +1094,38 @@ async function startManual() {
     if (!(e instanceof AuthError)) toast(e.message, 5000);
   }
 }
-$("btnAuto").addEventListener("click", () => { if (state.project) showModeChooser(); });
+$("btnAuto").addEventListener("click", () => {
+  if (!state.project) return;
+  if (recall("lp_intro_done")) showModeChooser(); else showIntro();
+});
+
+// First time they tap Start: what to expect from the LolliPOP edits (with "Don't show this again").
+function showIntro() {
+  preview.pause();
+  state.wizard = null; state.autoStep = null;
+  const skip = el("input", { type: "checkbox" });
+  const item = (ico, title, text) => el("div", { class: "intro-item" }, el("span", { class: "intro-ico" }, ico),
+    el("div", {}, el("b", {}, title), el("p", {}, text)));
+  renderSheet({
+    key: "intro", title: "🍭 What LolliPOP will do for you",
+    content: [
+      item("✨", "AI Auto Edit — the easy way",
+        "Answer 5 quick questions (caption style, logo, headline words, music, B-roll). AI writes your captions, adds slow zooms, cuts the long pauses, places everything and makes 4 finished looks. You just pick your favorite."),
+      item("🛠", "Manual Edit — you're in control",
+        "Go step by step through trim, captions, headline, logo, zoom, B-roll and music, and change anything you like."),
+      item("⏱", "About a minute to build",
+        "The AI needs about a minute to listen to your video. Saving the finished video takes about 2 minutes for a 30–60 second video — keep the app open."),
+      item("💾", "Then save and send",
+        "Save it to your phone first, then send it to Messages, Instagram, TikTok or Facebook — as many as you like."),
+      item("⬇", "Look for “Scroll for more”",
+        "When a panel has more options below, a yellow button shows you — tap it or scroll down."),
+      el("label", { class: "intro-skip" }, skip, " Don't show this again"),
+    ],
+    footer: [el("div", { class: "foot-btns" },
+      el("span"),
+      el("button", { class: "btn btn-primary next-btn", onclick: () => { if (skip.checked) store("lp_intro_done", "1"); showModeChooser(); } }, "Got it — let's go ›"))],
+  });
+}
 
 $("btnReanalyze").addEventListener("click", async () => {
   if (!confirm("Re-run the AI analysis? This replaces your captions, zooms and B-roll (your headline, logo and music stay).")) return;
