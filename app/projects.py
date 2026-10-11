@@ -237,7 +237,10 @@ def prepare(pid: str, progress) -> dict:
     return {"ok": True}
 
 
-def auto_edit(pid: str, progress) -> dict:
+def auto_edit(pid: str, progress, opts: dict | None = None) -> dict:
+    """opts (one-tap AI edit): {"broll": {"mode": "ai" | "chosen" | "off",
+    "items": [{"query": "house keys"} | {"clip": "<my clip id>"}]}}. Without opts: the classic AI edit."""
+    opts = opts or {}
     d = pdir(pid)
     p = load(pid)
     src = d / "source.mp4"
@@ -289,12 +292,26 @@ def auto_edit(pid: str, progress) -> dict:
 
     progress(0.65, "Choosing B-roll")
     broll = []
-    clips = {c["tag"]: config.CLIPS_DIR / c["file"] for c in list_clips()}
-    if not config.STOCK_ENABLED and not clips:
+    my_clips = list_clips()
+    clips = {c["tag"]: config.CLIPS_DIR / c["file"] for c in my_clips}
+    bopt = opts.get("broll") or {}
+    mode = bopt.get("mode")
+    if mode == "off":
+        pass
+    elif not config.STOCK_ENABLED and not clips:
         warnings.append("B-roll: add a PIXABAY_API_KEY (or PEXELS_API_KEY) or upload your own clips to enable it.")
     elif lines:
         trimmed = [l for l in lines if l["start"] >= p["trim"]["start"] and l["end"] <= p["trim"]["end"]]
-        moments, method = broll_mod.plan_moments(trimmed, p["trim"]["end"] - p["trim"]["start"], list(clips))
+        length = p["trim"]["end"] - p["trim"]["start"]
+        if mode == "chosen" and bopt.get("items"):
+            by_id = {c["id"]: c["tag"] for c in my_clips}
+            items = [{"clip_tag": by_id[i["clip"]]} if i.get("clip") in by_id else {"query": i.get("query", "")}
+                     for i in bopt["items"][:6] if i.get("clip") in by_id or (i.get("query") or "").strip()]
+            moments, method = broll_mod.plan_chosen(trimmed, items), "chosen"
+        elif mode == "ai":
+            moments, method = broll_mod.plan_moments(trimmed, length, list(clips), broll_mod.count_for(length))
+        else:
+            moments, method = broll_mod.plan_moments(trimmed, length, list(clips))
         used: set[str] = set()
         before = broll_mod.used_before()  # clips from earlier videos: get fresh ones
         for k, m in enumerate(moments):
@@ -330,6 +347,11 @@ def auto_edit(pid: str, progress) -> dict:
         p["warnings"] = warnings
         save(p)
     return {"warnings": warnings}
+
+
+def auto_edit_with(pid: str, opts: dict, progress) -> dict:
+    """Job entry point for the one-tap AI edit (jobs pass `progress` last)."""
+    return auto_edit(pid, progress, opts)
 
 
 def swap_broll(pid: str, bid: str, progress) -> dict:

@@ -278,10 +278,12 @@ def prepare_again(pid: str):
 
 
 @app.post("/api/projects/{pid}/auto-edit")
-def auto_edit(pid: str):
+def auto_edit(pid: str, opts: dict | None = Body(None)):
     p = _project_or_404(pid)
     if p.get("status") != "ready":
         raise HTTPException(409, "The video is still being prepared.")
+    if opts:
+        return jobs.submit("auto-edit", pid, projects.auto_edit_with, pid, opts)
     return jobs.submit("auto-edit", pid, projects.auto_edit, pid)
 
 
@@ -289,6 +291,35 @@ def auto_edit(pid: str):
 def swap_broll(pid: str, bid: str):
     _project_or_404(pid)
     return jobs.submit("swap", pid, projects.swap_broll, pid, bid)
+
+
+MUSIC_DIR = config.STATIC_DIR / "music"
+
+
+def music_library() -> list[dict]:
+    import json
+    lib = json.loads((MUSIC_DIR / "library.json").read_text())
+    return [{**t, "url": f"/static/music/{t['file']}"} for t in lib if (MUSIC_DIR / t["file"]).exists()]
+
+
+@app.get("/api/music-library")
+def get_music_library():
+    return {"tracks": music_library()}
+
+
+@app.post("/api/projects/{pid}/music/library")
+def pick_library_music(pid: str, track: str = Body(..., embed=True)):
+    """Use a song from the built-in library (copied into the project, like an upload)."""
+    p = _project_or_404(pid)
+    t = next((x for x in music_library() if x["id"] == track), None)
+    if not t:
+        raise HTTPException(404, "Song not found")
+    d = projects.pdir(pid)
+    for old in d.glob("music.*"):
+        old.unlink()
+    shutil.copyfile(MUSIC_DIR / t["file"], d / "music.mp3")
+    music = {**p["music"], "enabled": True, "file": "music.mp3", "name": t["name"], "track": t["id"]}
+    return projects.update(pid, {"music": music})
 
 
 @app.post("/api/projects/{pid}/music")
@@ -299,7 +330,7 @@ def upload_music(pid: str, file: UploadFile = File(...)):
         old.unlink()
     ext = Path(file.filename or "music.mp3").suffix.lower() or ".mp3"
     _save_upload(file, d / f"music{ext}")
-    music = {**p["music"], "enabled": True, "file": f"music{ext}", "name": file.filename}
+    music = {**p["music"], "enabled": True, "file": f"music{ext}", "name": file.filename, "track": None}
     return projects.update(pid, {"music": music})
 
 

@@ -107,6 +107,11 @@ def caption_image(style: dict, line: dict, active: int, since: float) -> tuple[I
     if style.get("uppercase", True):
         words = [w.upper() for w in words]
     size = int(style.get("size", 66))
+    if style.get("fill"):  # AI looks: every line as wide as the screen allows (up to 2x the size)
+        w0 = font(style.get("font", "Montserrat"), size).getlength(" ".join(words))
+        if w0 > 0:
+            size = int(min(size * 2, size * W * 0.9 / w0))
+    base_size = size
     if style.get("animation", "pop") == "pop":
         size = int(size * (0.82 + 0.18 * ease(since / 0.12)))
     f = font(style.get("font", "Montserrat"), size)
@@ -115,7 +120,7 @@ def caption_image(style: dict, line: dict, active: int, since: float) -> tuple[I
     if width > max_w:  # shrink long lines to fit
         size = int(size * max_w / width)
         f = font(style.get("font", "Montserrat"), size)
-    stroke = max(0, int(style.get("stroke", 7) * size / max(1, style.get("size", 66))))
+    stroke = max(0, int(style.get("stroke", 7) * size / max(1, base_size if style.get("fill") else style.get("size", 66))))
     keyed = [[(w, j == active) for j, w in enumerate(words)]]
     pad = stroke + 12 + int(size * 0.2)
     tw = int(f.getlength(" ".join(words))) + pad * 2

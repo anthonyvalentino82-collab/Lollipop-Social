@@ -383,7 +383,13 @@ export class Preview {
     const k = this.k;
     let words = line.words.map((w) => w.w);
     if (style.uppercase !== false) words = words.map((w) => w.toUpperCase());
-    const base = style.size || 66;
+    let base = style.size || 66;
+    const family0 = style.font || "Montserrat";
+    if (style.fill) { // AI looks: every line as wide as the screen allows (up to 2x the size)
+      this.ctx.font = `${base * k}px "${family0}"`;
+      const w0 = this.ctx.measureText(words.join(" ")).width / k;
+      if (w0 > 0) base = Math.floor(Math.min(base * 2, base * OW * 0.9 / w0));
+    }
     let size = base;
     if ((style.animation || "pop") === "pop") size = Math.floor(base * (0.82 + 0.18 * ease(since / 0.12)));
     const family = style.font || "Montserrat";
@@ -477,7 +483,7 @@ export class Preview {
     const o = this.target(key);
     if (key === "logo") o.w = Math.min(1, Math.max(0.06, v));
     else if (key === "headline") o.size = Math.round(Math.min(400, Math.max(40, v)));
-    else o.size = Math.round(Math.min(160, Math.max(28, v)));
+    else { o.size = Math.round(Math.min(160, Math.max(28, v))); o.fill = false; } // resized by hand: stop auto-filling
   }
 
   bindGestures() {

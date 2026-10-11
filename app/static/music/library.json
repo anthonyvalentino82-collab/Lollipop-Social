@@ -1,0 +1,12 @@
+[
+  {"id": "clocks", "name": "Clocks", "vibe": "Short guitar", "file": "clocks.mp3"},
+  {"id": "human-nature", "name": "Human Nature", "vibe": "Acoustic guitar", "file": "human-nature.mp3"},
+  {"id": "iris", "name": "Iris", "vibe": "Heartfelt", "file": "iris.mp3"},
+  {"id": "peter-tranquil", "name": "Tranquil", "vibe": "Calm", "file": "peter-tranquil.mp3"},
+  {"id": "toto", "name": "Toto", "vibe": "Feel-good", "file": "toto.mp3"},
+  {"id": "learn-to-fly", "name": "Learn to Fly", "vibe": "Upbeat", "file": "learn-to-fly.mp3"},
+  {"id": "say-it-aint-so", "name": "Say It Ain't So", "vibe": "Laid-back rock", "file": "say-it-aint-so.mp3"},
+  {"id": "stapleton", "name": "Chris Stapleton", "vibe": "Country soul", "file": "stapleton.mp3"},
+  {"id": "still-believe", "name": "Still Believe", "vibe": "Pop", "file": "still-believe.mp3"},
+  {"id": "alice", "name": "Alice", "vibe": "Short & sweet", "file": "alice.mp3"}
+]

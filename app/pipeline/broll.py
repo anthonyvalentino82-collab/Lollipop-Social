@@ -27,16 +27,47 @@ know knows think thinks feel keep keeps put let lets easier faster harder bigger
 helped helping buy buying sell selling""".split())
 
 
-def plan_moments(lines: list[dict], duration: float, clip_tags: list[str]) -> tuple[list[dict], str]:
-    """Returns (moments, method). Each moment: {start, end, query, clip_tag}."""
+def count_for(duration: float) -> int:
+    """How many B-roll clips the one-tap AI edit uses: 1 for a ~15 s reel, 2 for ~30 s, 3 for ~60 s."""
+    return 1 if duration <= 20 else 2 if duration <= 45 else 3
+
+
+def plan_moments(lines: list[dict], duration: float, clip_tags: list[str],
+                 want: int | None = None) -> tuple[list[dict], str]:
+    """Returns (moments, method). Each moment: {start, end, query, clip_tag}.
+    `want`: exact number of moments to aim for (None = decide from the length)."""
     if not lines:
         return [], "none"
     if config.ANTHROPIC_API_KEY:
         try:
-            return _plan_with_claude(lines, duration, clip_tags), "claude"
+            return _plan_with_claude(lines, duration, clip_tags, want), "claude"
         except Exception as exc:  # fall back rather than failing the whole auto edit
             print(f"[broll] Claude planning failed, using keyword fallback: {exc}")
-    return _plan_with_keywords(lines, duration, clip_tags), "keywords"
+    return _plan_with_keywords(lines, duration, clip_tags, want), "keywords"
+
+
+def plan_chosen(lines: list[dict], items: list[dict]) -> list[dict]:
+    """The creator chose the B-roll (typed search words and/or their own clips): spread them
+    evenly through the video, after the first 2 seconds."""
+    usable = [i for i, ln in enumerate(lines) if ln["start"] >= 2.0]
+    if not usable or not items:
+        return []
+    t0, t1 = lines[usable[0]]["start"], lines[-1]["end"]
+    out, taken = [], set()
+    for k, item in enumerate(items):
+        target = t0 + (t1 - t0) * (k + 0.5) / len(items)
+        i = min((j for j in usable if j not in taken), key=lambda j: abs(lines[j]["start"] - target), default=None)
+        if i is None:
+            break
+        taken.update({i, i + 1})
+        start, end = _window(lines, i, i + 1)
+        if item.get("clip_tag"):
+            out.append({"start": start, "end": end, "query": item["clip_tag"], "clip_tag": item["clip_tag"]})
+        else:
+            q = item.get("query", "").strip()[:60]
+            out.append({"start": start, "end": end, "query": q, "clip_tag": "",
+                        "alts": random.sample(NICHE_QUERIES, 3)})
+    return _non_overlapping(sorted(out, key=lambda m: m["start"]))
 
 
 def _window(lines, a, b):
@@ -48,13 +79,13 @@ def _window(lines, a, b):
     return round(start, 3), round(min(end, start + 4.5), 3)
 
 
-def _plan_with_claude(lines, duration, clip_tags):
+def _plan_with_claude(lines, duration, clip_tags, want=None):
     import anthropic
 
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
     transcript = "\n".join(f'{i}: [{ln["start"]:.1f}s] {" ".join(w["w"] for w in ln["words"])}'
                            for i, ln in enumerate(lines))
-    max_moments = max(1, min(6, round(duration / 10)))
+    max_moments = want or max(1, min(6, round(duration / 10)))
     prompt = (
         "You are editing a short vertical talking-head video for social media. Pick moments where "
         "cutting away to B-roll footage would illustrate what the speaker is saying (the voice keeps "
@@ -67,7 +98,8 @@ def _plan_with_claude(lines, duration, clip_tags):
         "Add words like 'american', 'usa' or 'suburban' when they help find U.S.-looking footage. "
         "Avoid generic or foreign-looking scenes, and avoid words with other meanings (say 'homebuyers' "
         "or 'married homeowners', not just 'couple', which also finds animals).\n\n"
-        f"Rules: at most {max_moments} moments; skip the first 2 seconds (viewers need to see the "
+        + (f"Rules: exactly {max_moments} moment{'s' if max_moments > 1 else ''} (spread through the video); skip"
+         if want else f"Rules: at most {max_moments} moments; skip") + " the first 2 seconds (viewers need to see the "
         "speaker's face first); each moment spans 1-3 consecutive caption lines (about 2-4 seconds); "
         "leave at least 4 seconds between moments; B-roll should cover under a third of the video.\n"
         "`query` is a 2-4 word stock-footage search term; `alts` are 2 different search terms for the "
@@ -107,7 +139,7 @@ def _plan_with_claude(lines, duration, clip_tags):
     return _non_overlapping(out)
 
 
-def _plan_with_keywords(lines, duration, clip_tags):
+def _plan_with_keywords(lines, duration, clip_tags, want=None):
     """No-AI fallback: pick evenly spaced lines and search their most specific word."""
     candidates = []
     for i, ln in enumerate(lines):
@@ -125,7 +157,7 @@ def _plan_with_keywords(lines, duration, clip_tags):
         query = pairs[0] if pairs else (max(singles, key=len) if singles else tag)
         if tag or query:
             candidates.append((i, tag, query))
-    want = max(1, min(5, round(duration / 12)))
+    want = want or max(1, min(5, round(duration / 12)))
     if not candidates:
         return []
     step = max(1, len(candidates) // want)

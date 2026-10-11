@@ -990,3 +990,44 @@ body.sheet-open[data-size] .sheet:not(.tall) { max-height: none; }
 .rv-bar { position: absolute; left: 12px; right: 12px; bottom: 10px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.25); overflow: hidden; pointer-events: none; transition: opacity .3s; }
 .rv-bar i { display: block; height: 100%; width: 0; background: #fff; }
 .rv-box.playing .rv-bar { opacity: .6; }
+
+/* ---------- ✨ AI Auto Edit ---------- */
+.mode-btn { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; border: 0; border-radius: 18px; padding: 16px 16px;
+  color: #fff; font-family: inherit; cursor: pointer; }
+.mode-btn:active { transform: scale(.98); }
+.mode-ico { font-size: 30px; line-height: 1; }
+.mode-txt { display: flex; flex-direction: column; gap: 3px; font-weight: 900; font-size: 19px; }
+.mode-txt small { font-weight: 600; font-size: 13px; opacity: .9; line-height: 1.3; }
+.mode-ai { background: linear-gradient(135deg, #ff1744, #ff7a3d 60%, #F2C230); box-shadow: 0 0 22px rgba(255,23,68,.45), inset 0 0 0 2px rgba(255,255,255,.25); }
+.mode-manual { background: linear-gradient(135deg, #3a1a1c, #24100f); box-shadow: inset 0 0 0 1.5px rgba(242,194,48,.5); }
+
+.song-list { display: flex; flex-direction: column; gap: 6px; }
+.song { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 12px; background: rgba(255,255,255,.04);
+  border: 1.5px solid var(--line); cursor: pointer; }
+.song.on { border-color: var(--gold); background: rgba(242,194,48,.12); }
+.song-play { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--red); color: #fff; font-size: 13px; font-weight: 900; display: grid; place-items: center; }
+.song-play.off { background: rgba(255,255,255,.08); color: var(--muted); }
+.song-name { flex: 1; min-width: 0; display: flex; flex-direction: column; font-weight: 800; font-size: 15px; }
+.song-name small { font-weight: 600; font-size: 12px; color: var(--muted); }
+.song-check { flex: none; color: var(--gold); font-weight: 900; font-size: 18px; width: 18px; }
+.myclips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.tpl-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tpl { position: relative; padding: 0; border: 2.5px solid transparent; border-radius: 12px; overflow: hidden; background: #000; cursor: pointer;
+  display: flex; flex-direction: column; font-family: inherit; color: #fff; }
+.tpl.on { border-color: var(--gold); box-shadow: 0 0 14px rgba(242,194,48,.5); }
+.tpl img, .tpl-ph { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; display: block; }
+.tpl-ph { display: grid; place-items: center; font-weight: 900; background: #1b0d0f; }
+.tpl-num { position: absolute; top: 4px; left: 4px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,.65); font-size: 11px; font-weight: 900; display: grid; place-items: center; }
+.tpl-name { font-size: 11.5px; font-weight: 900; padding: 4px 4px 0; text-align: center; }
+.tpl-song { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 10px; color: var(--muted); padding: 2px 3px 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tpl-play { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 0; background: var(--red); color: #fff; font-size: 8px; padding: 0; }
+.result-step { font-weight: 900; font-size: 15px; color: #fff; margin: 4px 2px -2px; display: flex; flex-direction: column; gap: 1px; }
+.result-step small { font-weight: 600; font-size: 12px; color: var(--muted); }
+.social-bubble.sent { position: relative; }
+.social-bubble.sent::after { content: "✓"; position: absolute; top: -2px; right: 6px; width: 20px; height: 20px; border-radius: 50%; background: #22C55E; color: #fff; font-size: 12px; font-weight: 900; display: grid; place-items: center; }
+.scroll-hint { position: sticky; bottom: 0; align-self: center; margin-top: -6px; z-index: 3; border: 0; border-radius: 999px; padding: 7px 16px;
+  background: linear-gradient(135deg, #F2C230, #ffdf6e); color: #2a0a0c; font-weight: 900; font-size: 13px; font-family: inherit;
+  box-shadow: 0 4px 14px rgba(0,0,0,.6); animation: hintBob 1.4s ease-in-out infinite; }
+.scroll-hint[hidden] { display: none; }
+@keyframes hintBob { 50% { transform: translateY(-3px); } }

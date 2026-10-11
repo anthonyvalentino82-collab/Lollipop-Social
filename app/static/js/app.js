@@ -202,7 +202,7 @@ function busy(msg, p) {
 const preview = new Preview($("canvas"), video, {
   onChange: (key) => save(key === "logo" ? ["logo"] : key === "headline" ? ["headline"] : ["captions"]),
   onTap: (key) => {
-    if (key) { if (state.wizard == null) openSheet(key); } // during AI Edit, tapping just selects for dragging
+    if (key) { if (state.wizard == null && state.autoStep == null && state.sheet !== "templates") openSheet(key); } // during AI Edit, tapping just selects for dragging
     else if (video.paused) preview.play(); else preview.pause();
   },
   onTime: (t) => updateScrub(t),
@@ -1070,20 +1070,20 @@ $("inUpload").addEventListener("change", (e) => { handleVideoFile(e.target.files
 $("btnNew").addEventListener("click", () => { if (confirm("Start a new video? (This one stays saved on the server for 14 days.)")) resetToEmpty(); });
 
 // ---------- AI edit (analysis + guided steps) ----------
-async function runAnalysis() {
+async function runAnalysis(opts = null) {
   const p = state.project;
   preview.pause();
   closeSheet();
   await flush();
   busy("Starting AI Edit…", 0);
-  const start = () => api(`/api/projects/${p.id}/auto-edit`, { method: "POST" });
+  const start = () => api(`/api/projects/${p.id}/auto-edit`, opts ? { method: "POST", json: opts } : { method: "POST" });
   await runJob(await start(), start, (j) => busy(j.message, j.progress));
   const fresh = await api(`/api/projects/${p.id}`);
   busy(null);
   await openProject(fresh);
 }
 
-$("btnAuto").addEventListener("click", async () => {
+async function startManual() {
   const p = state.project;
   if (!p) return;
   try {
@@ -1093,7 +1093,8 @@ $("btnAuto").addEventListener("click", async () => {
     busy(null);
     if (!(e instanceof AuthError)) toast(e.message, 5000);
   }
-});
+}
+$("btnAuto").addEventListener("click", () => { if (state.project) showModeChooser(); });
 
 $("btnReanalyze").addEventListener("click", async () => {
   if (!confirm("Re-run the AI analysis? This replaces your captions, zooms and B-roll (your headline, logo and music stay).")) return;
@@ -1117,6 +1118,11 @@ async function saveVideo() {
   let url;
   try {
     // One bar for the whole save: building on the server = 0-90%, download to the phone = 90-100%.
+    // Tell them up front how long it takes (about 3.5 s of work per second of video on the server).
+    const secs = keptDuration(keptSegments(p.trim, effectiveCuts(p)));
+    const mins = Math.max(1, Math.round((secs * 3.5 + 20) / 60));
+    $("busyNote").textContent = `A ${Math.round(secs)}-second video takes about ${mins} minute${mins > 1 ? "s" : ""}. `
+      + "Keep this screen open — you can switch apps and come back to check on it.";
     busy("Saving your video", 0);
     const start = () => api(`/api/projects/${p.id}/render`, { method: "POST" });
     const done = await runJob(await start(), start, (j) => busy(j.status === "queued" ? "Waiting for the server…" : j.message, j.progress * 0.9));
@@ -1157,6 +1163,7 @@ function showExport(blob, url, refresh = false, failed = false) {
   }
   const acts = $("resultActions");
   acts.innerHTML = "";
+  acts.append(el("div", { class: "result-step" }, "1️⃣ Save it to your phone first"));
   if (pending) {
     acts.append(el("button", { class: "btn btn-primary save-wait", disabled: true }, "Getting it ready to save… 0%"));
   } else if (canShare) {
@@ -1166,14 +1173,16 @@ function showExport(blob, url, refresh = false, failed = false) {
         try { await navigator.share({ files: [file] }); }
         catch (e) { if (e.name !== "AbortError") toast("Sharing didn't open — use “Open video” instead.", 5000); }
       },
-    }, "Save to iPhone / Share"));
+    }, "💾 Save to my iPhone"));
   }
+  acts.append(el("div", { class: "result-step" }, "2️⃣ Then send it — to as many as you like",
+    el("small", {}, "After each one, come back here and tap the next.")));
   const bubbles = socialBubbles(file, url, v);
   if (pending) bubbles.classList.add("waiting");
   acts.append(bubbles);
   acts.append(
     el("p", { class: "note center" }, canShare
-      ? "Then choose “Save Video” for Photos — or send to Messages, Instagram, TikTok, Facebook, LinkedIn or YouTube."
+      ? "On the iPhone menu choose “Save Video” to put it in your Photos."
       : "Tap “Open video”, then Share (square with arrow) → “Save Video”."),
     el("a", { class: "small-btn wide", href: url, target: "_blank", rel: "noopener" }, "Open video"),
     el("button", { class: "btn result-done", onclick: closeToStart }, "✅ All done — back to start"));
@@ -1189,6 +1198,13 @@ const SOCIAL = [
   { name: "TikTok", icon: "/icons/tiktok.png", app: "snssdk1233://", web: "https://www.tiktok.com/upload" },
   { name: "Facebook", icon: "/icons/facebook.png", app: "fb://", web: "https://www.facebook.com/" },
 ];
+// Back from Instagram / TikTok / …: remind them they can send it somewhere else too.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && state.sentTo && !$("result").hidden) {
+    toast(`Sent to ${state.sentTo}? Tap another to send it again, or “All done”.`, 4500);
+    state.sentTo = null;
+  }
+});
 function socialBubbles(file, url, player) {
   const row = el("div", { class: "social-row" });
   for (const s of SOCIAL) {
@@ -1199,6 +1215,8 @@ function socialBubbles(file, url, player) {
 }
 async function postTo(s, file, url, player) {
   player.pause();
+  state.sentTo = s.name;
+  document.querySelectorAll(".social-bubble").forEach((b) => { if (b.querySelector("span")?.textContent === s.name) b.classList.add("sent"); });
   // Messages: a web page can't attach a video to an sms: link, so the iPhone share
   // sheet is the way in — the video arrives already attached, ready to text.
   if (s.text) {
@@ -1298,6 +1316,8 @@ function closeSheet() {
   placeSizeHint();
   state.sheet = null;
   state.wizard = null;
+  state.autoStep = null;
+  stopSample();
   fitStage();
   preview.ghostCaptions = false;
   preview.draw();
@@ -1319,7 +1339,9 @@ function renderSheet({ key, title, step, content, footer }) {
   body.dataset.key = key;
   body.innerHTML = "";
   body.append(...content.filter(Boolean));
+  body.append(el("button", { class: "scroll-hint", hidden: true, onclick: () => body.scrollBy({ top: body.clientHeight * 0.7, behavior: "smooth" }) }, "⬇ Scroll for more"));
   body.scrollTop = keepScroll;
+  [0, 300, 900].forEach((ms) => setTimeout(updateScrollHint, ms));
   const foot = $("sheetFoot");
   foot.innerHTML = "";
   foot.hidden = !footer;
@@ -1342,8 +1364,19 @@ function openSheet(tool, title, content) {
   renderSheet({ key: tool, title: title || TITLES[tool], content: content || BUILDERS[tool]() });
 }
 
+// "Scroll for more" whenever part of a panel is hidden below — people don't know to scroll otherwise.
+function updateScrollHint() {
+  const body = $("sheetBody"), hint = body.querySelector(".scroll-hint");
+  if (!hint) return;
+  hint.hidden = body.scrollHeight - body.scrollTop - body.clientHeight < 24;
+}
+$("sheetBody").addEventListener("scroll", updateScrollHint, { passive: true });
+new ResizeObserver(updateScrollHint).observe($("sheetBody"));
+
 function refreshSheet() {
-  if (state.wizard != null) showStep(state.wizard);
+  if (state.autoStep != null) showAutoStep(state.autoStep);
+  else if (state.sheet === "templates") showTemplates(false);
+  else if (state.wizard != null) showStep(state.wizard);
   else if (state.sheet && BUILDERS[state.sheet]) openSheet(state.sheet);
 }
 
@@ -1386,6 +1419,386 @@ async function finishWizard() {
   video.currentTime = p.trim.start;
   preview.play(); // this tap counts as permission to play with sound
   toast("Here's your video! Like it? Tap Save Video.", 4000);
+}
+
+// ===================== ✨ AI AUTO EDIT =====================
+// Five quick picks (captions look, logo, headline words, music, B-roll) — no placing or sizing.
+// Then the AI builds everything and shows 4 finished looks; pick one, tweak if you like, save.
+
+// Pick how to edit: the one-tap AI Auto Edit, or the step-by-step manual edit.
+function showModeChooser() {
+  preview.pause();
+  state.wizard = null; state.autoStep = null;
+  const p = state.project;
+  renderSheet({
+    key: "mode", title: "How do you want to edit?",
+    content: [
+      el("button", { class: "mode-btn mode-ai", onclick: () => startAuto() },
+        el("span", { class: "mode-ico" }, "✨"),
+        el("span", { class: "mode-txt" }, "AI Auto Edit",
+          el("small", {}, "5 quick taps — AI does everything, then pick from 4 finished looks"))),
+      el("button", { class: "mode-btn mode-manual", onclick: () => startManual() },
+        el("span", { class: "mode-ico" }, "🛠"),
+        el("span", { class: "mode-txt" }, p.autoEdited ? "Manual Edit (your current edit)" : "Manual Edit",
+          el("small", {}, "Step by step: trim, captions, headline, logo, zoom, B-roll, music"))),
+    ],
+  });
+}
+
+const AUTO_STEPS = [
+  { key: "captions", title: "Pick a caption style", build: () => autoCaptionsStep() },
+  { key: "logo", title: "Your logo", build: () => autoLogoStep() },
+  { key: "headline", title: "Headline behind you", build: () => autoHeadlineStep() },
+  { key: "music", title: "Pick your music", build: () => autoMusicStep() },
+  { key: "broll", title: "B-roll clips", build: () => autoBrollStep() },
+];
+
+function startAuto() {
+  const p = state.project;
+  const len = keptDuration(keptSegments(p.trim, effectiveCuts(p)));
+  state.auto = {
+    look: Math.max(0, captionLooks().findIndex((x) => x.style.font === p.captions.style.font && x.style.highlight === p.captions.style.highlight)),
+    track: p.music?.track || (p.music?.file ? "own" : "clocks"),
+    count: len <= 20 ? 1 : len <= 45 ? 2 : 3,
+    brollMode: "ai", words: [], clips: [],
+  };
+  if (state.auto.track === "clocks" && !p.music?.file) pickLibraryTrack("clocks", true);
+  Object.assign(p.captions.style, captionLooks()[state.auto.look].style);
+  p.captions.enabled = true;
+  save(["captions"]);
+  showAutoStep(0);
+}
+
+function showAutoStep(i) {
+  preview.pause();
+  state.wizard = null;
+  state.autoStep = i;
+  const st = AUTO_STEPS[i], last = i === AUTO_STEPS.length - 1;
+  renderSheet({
+    key: st.key, title: st.title, step: `✨ AI Auto Edit · ${i + 1} of ${AUTO_STEPS.length}`,
+    content: st.build(),
+    footer: [
+      el("div", { class: "dots" }, ...AUTO_STEPS.map((_, j) => el("span", { class: j === i ? "on" : j < i ? "done" : "" }))),
+      el("div", { class: "foot-btns" },
+        el("button", { class: "small-btn", onclick: () => (i > 0 ? showAutoStep(i - 1) : showModeChooser()) }, "‹ Back"),
+        el("button", { class: "btn btn-primary next-btn", onclick: () => (last ? buildAuto() : showAutoStep(i + 1)) },
+          last ? "✨ Make my 4 videos" : "Next ›")),
+    ],
+  });
+}
+
+// 1 · captions: just tap a look
+const CAPTION_LOOK_POP = { name: "Bold Pop", style: { font: "Anton", color: "#FFFFFF", highlight: "#2F80ED", highlightStyle: "box", boxText: "#FFFFFF", stroke: 7, uppercase: true, animation: "pop", size: 84 } };
+const captionLooks = () => [...CAPTION_PRESETS, CAPTION_LOOK_POP];
+function autoCaptionsStep() {
+  const c = state.project.captions;
+  return [
+    el("p", { class: "note" }, "Tap a look. AI sizes and places everything for you."),
+    el("div", { class: "presets presets-4" }, ...captionLooks().map((pr, k) => presetCard({
+      label: pr.name, sample: "Your first home", font: pr.style.font, color: pr.style.color, accent: pr.style.highlight,
+      upper: pr.style.uppercase, on: state.auto.look === k, box: pr.style.highlightStyle === "box", boxText: pr.style.boxText,
+      onpick: () => { state.auto.look = k; Object.assign(c.style, pr.style); c.enabled = true; save(["captions"]); refreshSheet(); },
+    }))),
+  ];
+}
+
+// 2 · logo: pick a saved one, add one, or none
+function autoLogoStep() {
+  return [el("p", { class: "note" }, "Tap your logo, or “+ Add logo” to save one from your phone. AI places it for you."), logoGrid()];
+}
+
+// 3 · headline words
+function autoHeadlineStep() {
+  const h = state.project.headline;
+  const ta = el("textarea", { rows: 2, placeholder: "e.g. RATES ARE *REALLY* HIGH" });
+  ta.value = h.text || "";
+  ta.addEventListener("input", () => { h.text = ta.value; h.enabled = !!h.text.trim(); save(["headline"]); });
+  return [
+    el("p", { class: "note" }, "Type the big words that go behind you (2–5 words work best). Leave empty for none. *Stars* color a word."),
+    ta,
+  ];
+}
+
+// 4 · music: tap ▶ to hear a sample, tap the song to use it
+let sampleAudio = null, sampleBtn = null;
+function stopSample() {
+  if (sampleAudio) { sampleAudio.pause(); sampleAudio = null; }
+  if (sampleBtn) { sampleBtn.textContent = "▶"; sampleBtn = null; }
+}
+function playSample(url, btn) {
+  const same = sampleBtn === btn;
+  stopSample();
+  if (same) return;
+  preview.pause();
+  sampleAudio = new Audio(url);
+  sampleAudio.volume = 0.8;
+  sampleAudio.play().catch(() => {});
+  sampleAudio.addEventListener("ended", stopSample);
+  sampleBtn = btn; btn.textContent = "■";
+}
+async function musicLibrary() {
+  if (!state.musicLib) state.musicLib = (await api("/api/music-library")).tracks;
+  return state.musicLib;
+}
+async function pickLibraryTrack(id, quiet = false) {
+  const p = state.project;
+  try {
+    const fresh = await api(`/api/projects/${p.id}/music/library`, { method: "POST", json: { track: id } });
+    p.music = fresh.music;
+    preview.setMusic(`/files/projects/${p.id}/${p.music.file}?v=${Date.now()}`);
+  } catch (e) { if (!quiet) toast(e.message); }
+}
+function autoMusicStep() {
+  const p = state.project;
+  const list = el("div", { class: "song-list" }, el("p", { class: "note" }, "Loading songs…"));
+  const row = (id, name, vibe, url) => {
+    const on = state.auto.track === id;
+    const play = url ? el("button", { class: "song-play", "aria-label": `Hear ${name}`, onclick: (e) => { e.stopPropagation(); playSample(url, play); } }, "▶") : null;
+    return el("div", { class: `song${on ? " on" : ""}`, onclick: async () => {
+      state.auto.track = id;
+      if (id === "none") { p.music.enabled = false; save(["music"]); }
+      else if (id !== "own") await pickLibraryTrack(id);
+      else { p.music.enabled = true; save(["music"]); }
+      refreshSheet();
+    } }, play || el("span", { class: "song-play off" }, id === "none" ? "—" : "♪"),
+      el("span", { class: "song-name" }, name, vibe ? el("small", {}, vibe) : null),
+      el("span", { class: "song-check" }, on ? "✓" : ""));
+  };
+  musicLibrary().then((tracks) => {
+    list.innerHTML = "";
+    for (const t of tracks) list.append(row(t.id, t.name, t.vibe, t.url));
+    if (p.music?.file && !p.music.track) list.append(row("own", p.music.name || "My music", "Your upload", `/files/projects/${p.id}/${p.music.file}`));
+    list.append(row("none", "No music", "", null));
+    requestAnimationFrame(fitStage);
+  }).catch((e) => { list.innerHTML = ""; list.append(el("p", { class: "note warn" }, e.message)); });
+  const inp = el("input", { type: "file", accept: "audio/*", hidden: true });
+  inp.addEventListener("change", async () => {
+    const f = inp.files[0];
+    if (!f) return;
+    try {
+      busy("Uploading music…", 0);
+      const fresh = await upload(`/api/projects/${p.id}/music`, { file: f }, (x) => busy(`Uploading music… ${Math.round(x * 100)}%`, x));
+      busy(null);
+      p.music = fresh.music; state.auto.track = "own";
+      preview.setMusic(`/files/projects/${p.id}/${p.music.file}?v=${Date.now()}`);
+      refreshSheet();
+    } catch (e) { busy(null); toast(e.message); }
+  });
+  return [
+    el("p", { class: "note" }, "Tap ▶ to hear a song, tap the name to use it. Your 4 finished looks each get their own song — this one goes on look #1."),
+    list,
+    el("label", { class: "small-btn wide" }, inp, "＋ Use my own song"),
+  ];
+}
+
+// 5 · B-roll: let AI pick, type words, use my clips, or none. 1 clip for ~15 s, 2 for ~30 s, 3 for ~60 s.
+function autoBrollStep() {
+  const a = state.auto, n = a.count;
+  const out = [
+    el("p", { class: "note" }, `Short clips shown while you talk. Your video gets ${n} clip${n > 1 ? "s" : ""}.`),
+    chips(null, [["ai", "✨ AI picks"], ["words", "✍️ I'll type words"], ["mine", "🎬 My clips"], ["off", "🚫 None"]], a.brollMode,
+      (v) => { a.brollMode = v; refreshSheet(); }),
+  ];
+  if (a.brollMode === "ai") out.push(el("p", { class: "note" }, `AI listens to what you say and picks ${n} matching clip${n > 1 ? "s" : ""} (homes, keys, signing papers…).`));
+  if (a.brollMode === "words") {
+    for (let k = 0; k < n; k++) {
+      const inp = el("input", { type: "text", placeholder: ["e.g. house keys", "e.g. for sale sign", "e.g. family moving in"][k] || "search words", value: a.words[k] || "" });
+      inp.addEventListener("input", () => { a.words[k] = inp.value; });
+      out.push(inp);
+    }
+  }
+  if (a.brollMode === "mine") {
+    const clips = state.settings?.clips || [];
+    const grid = el("div", { class: "myclips" });
+    for (const c of clips) {
+      const on = a.clips.includes(c.id);
+      grid.append(el("button", { class: `chip${on ? " on" : ""}`, onclick: () => {
+        a.clips = on ? a.clips.filter((x) => x !== c.id) : [...a.clips, c.id].slice(-n);
+        refreshSheet();
+      } }, `🎬 ${c.tag}`));
+    }
+    const inp = el("input", { type: "file", accept: "video/*", hidden: true });
+    inp.addEventListener("change", async () => {
+      const f = inp.files[0];
+      if (!f) return;
+      const tag = (prompt("What's this clip of? (e.g. keys, office, new home)") || "").trim();
+      if (!tag) { inp.value = ""; return; }
+      try {
+        busy("Uploading clip…", 0);
+        await upload("/api/clips", { file: f, tag }, (x) => busy(`Uploading clip… ${Math.round(x * 100)}%`, x));
+        busy(null);
+        state.settings = await api("/api/settings");
+        const added = state.settings.clips.find((c) => c.tag === tag);
+        if (added) a.clips = [...a.clips.filter((x) => x !== added.id), added.id].slice(-n);
+        refreshSheet();
+      } catch (e) { busy(null); toast(e.message); }
+    });
+    out.push(el("p", { class: "note" }, clips.length ? `Tap up to ${n} of your clips.` : "Upload a clip from your phone."), grid,
+      el("label", { class: "small-btn wide" }, inp, "＋ Upload a clip"));
+  }
+  return out;
+}
+
+// Build it: the AI does captions, slow zooms, B-roll and pause removal, then the 4 looks appear.
+async function buildAuto() {
+  const p = state.project, a = state.auto;
+  stopSample();
+  p.zoom.intensity = "subtle"; p.zoom.enabled = true; // slow, gentle zooms only
+  save(["zoom"]);
+  let broll = { mode: "ai" };
+  if (a.brollMode === "off") broll = { mode: "off" };
+  else if (a.brollMode === "words") {
+    const items = a.words.filter((w) => (w || "").trim()).map((w) => ({ query: w.trim() }));
+    broll = items.length ? { mode: "chosen", items } : { mode: "ai" };
+  } else if (a.brollMode === "mine") {
+    broll = a.clips.length ? { mode: "chosen", items: a.clips.map((id) => ({ clip: id })) } : { mode: "ai" };
+  }
+  try {
+    await runAnalysis({ broll });
+    if (a.brollMode === "off") { (state.project.broll || []).forEach((b) => (b.removed = true)); save(["broll"]); }
+    await showTemplates(true);
+  } catch (e) {
+    busy(null);
+    if (!(e instanceof AuthError)) showError("The AI edit didn't finish", e, buildAuto);
+  }
+}
+
+// ---------- the 4 looks ----------
+// Headline colors white / red / yellow / blue, four fonts, four logo spots, four caption looks,
+// four songs. Look #1 uses exactly what you picked.
+const TEMPLATES = [
+  { name: "Classic", color: "#FFFFFF", accent: "#F2C230", font: "Anton", logo: "left", music: "clocks" },
+  { name: "Bold Red", color: "#E3202A", accent: "#FFFFFF", font: "Bebas Neue", logo: "middle", music: "human-nature" },
+  { name: "Sunshine", color: "#F2C230", accent: "#FFFFFF", font: "Oswald", logo: "right", music: "iris" },
+  { name: "Ocean Blue", color: "#2F80ED", accent: "#FFFFFF", font: "Montserrat", logo: "big", music: "peter-tranquil" },
+];
+function templateSet() {
+  const a = state.auto || { look: 0, track: state.project.music?.track || null };
+  const looks = captionLooks();
+  const others = looks.map((_, k) => k).filter((k) => k !== a.look);
+  const noMusic = a.track === "none";
+  const used = new Set([a.track]);
+  return TEMPLATES.map((t, i) => {
+    let track = null;
+    if (!noMusic) {
+      if (i === 0) track = a.track || t.music;
+      else {
+        track = [t.music, ...TEMPLATES.map((x) => x.music), "toto", "learn-to-fly", "stapleton"].find((m) => !used.has(m));
+        used.add(track);
+      }
+    }
+    return { ...t, caption: looks[i === 0 ? a.look : others[(i - 1) % others.length]], track };
+  });
+}
+// Place everything for look i (all positions are fractions of the 1080x1920 frame).
+function layoutTemplate(t) {
+  const p = state.project, img = preview.logoImg;
+  const aspect = img && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0.5;
+  const w = { left: 0.32, middle: 0.36, right: 0.32, big: 0.62 }[t.logo];
+  const x = { left: 0.2, middle: 0.5, right: 0.8, big: 0.5 }[t.logo];
+  const hFrac = Math.min(0.24, (w * 1080 * aspect) / 1920);
+  const ly = 0.945 - hFrac / 2; // bottom edge just above the small LolliPOP mark
+  Object.assign(p.logo, { x, y: ly, w, opacity: 1 });
+  const capY = p.logo.enabled ? Math.min(0.8, ly - hFrac / 2 - 0.055) : 0.8;
+  Object.assign(p.captions.style, t.caption.style, { size: 110, fill: true, x: 0.5, y: capY }); // edge to edge
+  Object.assign(p.headline, { font: t.font, color: t.color, accent: t.accent, block: true, uppercase: true,
+    size: 260, x: 0.5, y: 0.25, maxWidth: 0.94, behind: true, lineHeight: 0.92 });
+  p.headline.enabled = !!(p.headline.text || "").trim();
+}
+// Make the headline as big as the screen allows: try bigger and bigger sizes (bigger = fewer words
+// per line, each line stretched edge to edge) and keep the biggest that fits in the top ~55%.
+function fitHeadline() {
+  const h = state.project.headline;
+  if (!h.enabled) return;
+  const heightAt = (size) => { h.size = size; preview.draw(); const b = preview.boxes.headline; return b ? b[3] - b[1] : 0; };
+  let best = 140;
+  for (let size = 140; size <= 560; size = Math.round(size * 1.12)) {
+    if (heightAt(size) <= 1920 * 0.55) best = size; else break;
+  }
+  const height = heightAt(best);
+  h.y = 0.03 + height / 1920 / 2; // top of the block near the top of the screen
+}
+
+async function snapshotTemplates(set) {
+  const p = state.project;
+  // A moment with the speaker on screen (not B-roll), about 2 s in.
+  const segs = keptSegments(p.trim, effectiveCuts(p));
+  let t = (segs[0]?.[0] ?? p.trim.start) + Math.min(2.2, keptDuration(segs) * 0.3);
+  for (const b of p.broll || []) if (!b.removed && t >= b.start && t <= b.end) t = b.end + 0.2;
+  video.pause();
+  if (Math.abs(video.currentTime - t) > 0.05) {
+    await new Promise((r) => { video.addEventListener("seeked", r, { once: true }); video.currentTime = t; setTimeout(r, 2500); });
+  }
+  await Promise.all([...new Set(set.flatMap((x) => [x.font, x.caption.style.font]))].map((f) => document.fonts.load(`80px "${f}"`).catch(() => {})));
+  if (preview.needsMask()) await preview.ensureMasker();
+  const keep = JSON.stringify({ c: p.captions.style, h: p.headline, l: p.logo });
+  preview.selected = null;
+  preview.ghostCaptions = true;
+  const shots = [];
+  const thumb = document.createElement("canvas");
+  thumb.width = 270; thumb.height = 480;
+  for (const tpl of set) {
+    layoutTemplate(tpl);
+    fitHeadline();
+    preview.draw(true); preview.draw();
+    thumb.getContext("2d").drawImage(preview.canvas, 0, 0, thumb.width, thumb.height);
+    shots.push(thumb.toDataURL("image/jpeg", 0.8));
+    tpl.saved = JSON.stringify({ c: p.captions.style, h: p.headline, l: p.logo });
+  }
+  const k = JSON.parse(keep);
+  Object.assign(p.captions.style, k.c); Object.assign(p.headline, k.h); Object.assign(p.logo, k.l);
+  return shots;
+}
+
+async function applyTemplate(i) {
+  const p = state.project, tpl = state.templates.set[i];
+  stopSample();
+  state.templates.pick = i;
+  const s = JSON.parse(tpl.saved);
+  Object.assign(p.captions.style, s.c); Object.assign(p.headline, s.h); Object.assign(p.logo, s.l);
+  p.captions.enabled = true;
+  save(["captions", "headline", "logo"]);
+  preview.draw();
+  if (tpl.track && tpl.track !== "own" && p.music?.track !== tpl.track) await pickLibraryTrack(tpl.track, true);
+  else if (tpl.track === "own" || tpl.track) { p.music.enabled = true; save(["music"]); }
+  else if (p.music) { p.music.enabled = false; save(["music"]); }
+}
+
+async function showTemplates(fresh = true) {
+  if (fresh || !state.templates) {
+    busy("Making your 4 looks…", 0.95);
+    const set = templateSet();
+    let shots = [];
+    try { shots = await snapshotTemplates(set); } catch (e) { console.warn(e); }
+    busy(null);
+    state.templates = { set, shots, pick: null };
+    await applyTemplate(0);
+  }
+  const T = state.templates;
+  const lib = await musicLibrary().catch(() => []);
+  const songName = (id) => id === "own" ? (state.project.music?.name || "My song") : id ? (lib.find((x) => x.id === id)?.name || id) : "No music";
+  state.wizard = null; state.autoStep = null;
+  renderSheet({
+    key: "templates", title: "Pick your favorite look",
+    step: "✨ Your 4 AI videos",
+    content: [
+      el("p", { class: "note" }, "Tap a look to see it big and play it. ▶ hears its song."),
+      el("div", { class: "tpl-grid" }, ...T.set.map((tpl, i) => {
+        const url = tpl.track && tpl.track !== "own" ? lib.find((x) => x.id === tpl.track)?.url : tpl.track === "own" ? `/files/projects/${state.project.id}/${state.project.music?.file}` : null;
+        const play = url ? el("button", { class: "tpl-play", "aria-label": "Hear the song", onclick: (e) => { e.stopPropagation(); playSample(url, play); } }, "▶") : null;
+        return el("div", { class: `tpl${T.pick === i ? " on" : ""}`, role: "button", onclick: async () => { await applyTemplate(i); refreshSheet(); } },
+          T.shots[i] ? el("img", { src: T.shots[i], alt: tpl.name }) : el("div", { class: "tpl-ph", style: `color:${tpl.color}` }, tpl.name),
+          el("span", { class: "tpl-num" }, String(i + 1)),
+          el("span", { class: "tpl-name" }, tpl.name),
+          el("span", { class: "tpl-song" }, play, `♪ ${songName(tpl.track)}`));
+      })),
+    ],
+    footer: [
+      el("div", { class: "foot-btns" },
+        el("button", { class: "small-btn", onclick: () => { closeSheet(); toast("Drag anything on the video to move it. Tap AI Edit → Manual Edit to change more. Then Save Video.", 6000); finishWizard(true); } }, "✏️ Edit it"),
+        el("button", { class: "btn btn-primary next-btn", onclick: () => { closeSheet(); saveVideo(); } }, "💾 Save this video")),
+    ],
+  });
 }
 
 document.querySelectorAll(".tools button").forEach((b) => b.addEventListener("click", () => openSheet(b.dataset.tool)));
@@ -1673,6 +2086,14 @@ function headlineSheet() {
 function logoSheet() {
   const p = state.project, l = p.logo;
   const changed = () => save(["logo"]);
+  const grid = logoGrid();
+  const pos = { tl: [0.2, 0.07], top: [0.5, 0.07], tr: [0.8, 0.07], bl: [0.2, 0.93], bottom: [0.5, 0.93], br: [0.8, 0.93] };
+  return logoSheetRest(grid, pos, l, changed);
+}
+// The logo tiles: "No logo", your saved logos, "+ Add logo" (used by the Logo step and the AI Auto Edit).
+function logoGrid() {
+  const p = state.project, l = p.logo;
+  const changed = () => save(["logo"]);
   const grid = el("div", { class: "logos" });
   // "No logo" first: every video starts without one.
   grid.append(el("div", { class: `logo-opt logo-none${l.enabled ? "" : " on"}`, onclick: () => { l.enabled = false; changed(); refreshSheet(); } }, "No logo"));
@@ -1700,7 +2121,9 @@ function logoSheet() {
     } catch (e) { toast(e.message); }
   });
   grid.append(el("label", { class: "logo-opt logo-add" }, inp, "+ Add logo"));
-  const pos = { tl: [0.2, 0.07], top: [0.5, 0.07], tr: [0.8, 0.07], bl: [0.2, 0.93], bottom: [0.5, 0.93], br: [0.8, 0.93] };
+  return grid;
+}
+function logoSheetRest(grid, pos, l, changed) {
   return [
     el("p", { class: "note" }, "Tap one of your logos, or “+ Add logo” to save a new one from your phone for this and future videos."),
     grid,
@@ -1849,7 +2272,7 @@ function captionsStep() {
       chips("Where on screen?", [["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]],
         s.y < 0.35 ? "top" : s.y < 0.6 ? "middle" : "bottom",
         (v) => { s.y = { top: 0.2, middle: 0.5, bottom: 0.72 }[v]; s.x = 0.5; changed(); }),
-      slider("Size", { min: 32, max: 140, value: s.size || 66, oninput: (v) => { s.size = v; changed(); } }),
+      slider("Size", { min: 32, max: 140, value: s.size || 66, oninput: (v) => { s.size = v; s.fill = false; changed(); } }),
       more(recall("lp_more_captions"),
         fontPicker("Font", FONTS_CAPTION, s.font, (v) => { s.font = v; changed(); }),
         (c.lines || []).length ? el("div", { class: "field" }, el("label", { class: "label" }, "Fix a misspelled word"), captionLinesList()) : null));
