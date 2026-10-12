@@ -1704,11 +1704,15 @@ async function buildAuto() {
 // ---------- the 4 looks ----------
 // Headline colors white / red / yellow / blue, four fonts, four logo spots, four caption looks,
 // four songs. Look #1 uses exactly what you picked.
+// Each look uses a different headline style. #1 (the default) is the big square block that fills
+// everything from the top of the screen down to the captions.
+//   block: every line stretched to the same width (one squared-off block of text)
+//   room:  how much of the screen height (from the top) the headline may use; "toCaptions" = all of it
 const TEMPLATES = [
-  { name: "Classic", color: "#FFFFFF", accent: "#F2C230", font: "Anton", logo: "left", music: "clocks" },
-  { name: "Bold Red", color: "#E3202A", accent: "#FFFFFF", font: "Bebas Neue", logo: "middle", music: "human-nature" },
-  { name: "Sunshine", color: "#F2C230", accent: "#FFFFFF", font: "Oswald", logo: "right", music: "iris" },
-  { name: "Ocean Blue", color: "#2F80ED", accent: "#FFFFFF", font: "Montserrat", logo: "big", music: "peter-tranquil" },
+  { name: "Classic", color: "#FFFFFF", accent: "#F2C230", font: "Anton", block: true, room: "toCaptions", logo: "left", music: "clocks" },
+  { name: "Bold Red", color: "#E3202A", accent: "#FFFFFF", font: "Bebas Neue", block: false, room: 0.42, logo: "middle", music: "human-nature" },
+  { name: "Sunshine", color: "#F2C230", accent: "#FFFFFF", font: "Lobster", block: false, room: 0.36, logo: "right", music: "iris" },
+  { name: "Ocean Blue", color: "#2F80ED", accent: "#FFFFFF", font: "Oswald", block: true, room: 0.5, logo: "big", music: "peter-tranquil" },
 ];
 function templateSet() {
   const a = state.auto || { look: 0, track: state.project.music?.track || null };
@@ -1739,22 +1743,36 @@ function layoutTemplate(t) {
   Object.assign(p.logo, { x, y: ly, w, opacity: 1 });
   const capY = p.logo.enabled ? Math.min(0.8, ly - hFrac / 2 - 0.055) : 0.8;
   Object.assign(p.captions.style, t.caption.style, { size: 110, fill: true, x: 0.5, y: capY }); // edge to edge
-  Object.assign(p.headline, { font: t.font, color: t.color, accent: t.accent, block: true, uppercase: true,
-    size: 260, x: 0.5, y: 0.25, maxWidth: 0.94, behind: true, lineHeight: 0.92 });
+  Object.assign(p.headline, { font: t.font, color: t.color, accent: t.accent, block: t.block, uppercase: t.font !== "Lobster",
+    size: 200, x: 0.5, y: 0.25, maxWidth: 0.94, behind: true, lineHeight: t.font === "Lobster" ? 1.05 : 0.92 });
   p.headline.enabled = !!(p.headline.text || "").trim();
+  // Space the headline may fill: from 3% below the top down to just above the captions.
+  const capTop = capY - (110 * 0.62) / 1920 - 0.025;
+  t.maxH = t.room === "toCaptions" ? capTop - 0.03 : Math.min(t.room, capTop - 0.03);
 }
-// Make the headline as big as the screen allows: try bigger and bigger sizes (bigger = fewer words
-// per line, each line stretched edge to edge) and keep the biggest that fits in the top ~55%.
-function fitHeadline() {
+// Make the headline as big as its space allows. For the block styles, also try breaking it into
+// more, shorter lines (each stretched to the same width) so it becomes a big square that fills the
+// space down to the captions. Keep the biggest result whose text stays INSIDE the screen (no word
+// wider than the video) and inside its allowed height.
+function fitHeadline(maxH) {
   const h = state.project.headline;
   if (!h.enabled) return;
-  const heightAt = (size) => { h.size = size; preview.draw(); const b = preview.boxes.headline; return b ? b[3] - b[1] : 0; };
-  let best = 140;
-  for (let size = 140; size <= 560; size = Math.round(size * 1.12)) {
-    if (heightAt(size) <= 1920 * 0.55) best = size; else break;
+  const boxAt = (size, wrap) => {
+    h.size = size; h.maxWidth = wrap;
+    preview.drawHeadline(h); // text only — fast; the full frame is redrawn afterwards
+    const b = preview.boxes.headline;
+    return b ? [b[2] - b[0], b[3] - b[1]] : [0, 0];
+  };
+  const wraps = h.block !== false ? [0.94, 0.8, 0.66, 0.54, 0.44, 0.36, 0.3] : [0.94];
+  let best = [60, 0.94], bestArea = 0;
+  for (const wrap of wraps) {
+    for (let size = 60; size <= 900; size = Math.round(size * 1.05)) {
+      const [w, ht] = boxAt(size, wrap);
+      if (w <= 1080 * 0.94 && ht <= 1920 * maxH && w * ht > bestArea) { best = [size, wrap]; bestArea = w * ht; }
+    }
   }
-  const height = heightAt(best);
-  h.y = 0.03 + height / 1920 / 2; // top of the block near the top of the screen
+  const [, ht] = boxAt(...best);
+  h.y = 0.03 + ht / 1920 / 2; // top of the text near the top of the screen
 }
 
 async function snapshotTemplates(set) {
@@ -1777,7 +1795,7 @@ async function snapshotTemplates(set) {
   thumb.width = 270; thumb.height = 480;
   for (const tpl of set) {
     layoutTemplate(tpl);
-    fitHeadline();
+    fitHeadline(tpl.maxH);
     preview.draw(true); preview.draw();
     thumb.getContext("2d").drawImage(preview.canvas, 0, 0, thumb.width, thumb.height);
     shots.push(thumb.toDataURL("image/jpeg", 0.8));
