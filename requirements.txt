@@ -8,3 +8,4 @@ mediapipe==1.1.0
 httpx==0.28.1
 anthropic==1.13.0
 faster-whisper==1.2.1
+onnxruntime>=1.17   # video matting (person cut-out behind the headline)

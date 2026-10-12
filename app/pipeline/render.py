@@ -18,7 +18,7 @@ from .. import config
 from . import audio as audio_mod
 from .text import caption_image, headline_layer
 from .timeline import broll_at, caption_at, crop_rect, effective_cuts, kept_segments
-from .vision import PersonSegmenter
+from .vision import make_segmenter
 
 W, H, FPS = config.OUT_W, config.OUT_H, config.OUT_FPS
 
@@ -141,7 +141,7 @@ def render_project(project: dict, pdir: Path, out: Path, logo_path: Path | None,
     track = project.get("faceTrack", [])
     broll = [b for b in project.get("broll", []) if not b.get("removed")]
     behind = head.get("behind", True)
-    seg = PersonSegmenter("best" if head.get("cutout") == "best" else "sharp") \
+    seg = make_segmenter("best" if head.get("cutout") == "best" else "sharp") \
         if head_np is not None and behind else None
 
     # ---- encoder ----

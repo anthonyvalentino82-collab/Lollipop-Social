@@ -21,6 +21,76 @@ def _guided_filter(guide: np.ndarray, src: np.ndarray, r: int = 7, eps: float = 
     return mean(a) * guide + mean(m_p - a * m_i)
 
 
+class VideoMatter:
+    """Person cut-out with Robust Video Matting (RVM, MobileNetV3): a model made for cutting people
+    out of video. Unlike the selfie models it keeps hats, caps, hair and glasses with the person,
+    doesn't spill onto dark backgrounds, and remembers earlier frames, so the edge stays steady.
+
+    It looks at the whole (shrunk) frame each time; the edge is then snapped to the full-size
+    picture with the same edge-aware filter as before.
+      quality "sharp" (default): 270x480 frame, ~60 ms;  "best": 360x640, ~1.4x slower.
+    """
+
+    MODEL = "rvm_mobilenetv3_fp32.onnx"
+
+    def __init__(self, quality: str = "sharp"):
+        import onnxruntime as ort
+        so = ort.SessionOptions()
+        so.intra_op_num_threads = int(config.FFMPEG_THREADS) - 1 or 1
+        so.inter_op_num_threads = 1
+        self._sess = ort.InferenceSession(str(config.MODELS_DIR / self.MODEL), so, providers=["CPUExecutionProvider"])
+        self._size, self._ratio = ((360, 640), 0.5) if quality == "best" else ((270, 480), 0.667)
+        self.reset()
+
+    def reset(self):
+        self._rec = [np.zeros((1, 1, 1, 1), np.float32)] * 4
+
+    def _alpha(self, bgr: np.ndarray, warm: int = 1) -> np.ndarray:
+        x = cv2.resize(bgr, self._size, interpolation=cv2.INTER_AREA)[:, :, ::-1].astype(np.float32) / 255.0
+        x = np.ascontiguousarray(x.transpose(2, 0, 1)[None])
+        ratio = np.array([self._ratio], np.float32)
+        for _ in range(warm):
+            out = self._sess.run(None, {"src": x, "r1i": self._rec[0], "r2i": self._rec[1],
+                                        "r3i": self._rec[2], "r4i": self._rec[3], "downsample_ratio": ratio})
+            self._rec = out[2:6]
+        return out[1][0, 0]
+
+    def mask(self, bgr: np.ndarray, box: tuple[int, int, int, int] | None = None, fresh: bool = False) -> np.ndarray:
+        h, w = bgr.shape[:2]
+        x0, y0, x1, y1 = box or (0, 0, w, h)
+        if fresh:
+            self.reset()
+        # After a cut (or the first frame) the model has no memory yet: let it settle on this frame.
+        pha = self._alpha(bgr, warm=3 if fresh or self._rec[0].shape[-1] == 1 else 1)
+        sx, sy = pha.shape[1] / w, pha.shape[0] / h
+        # The box in the small alpha (with a margin so the edge filter has context), then full size.
+        m = cv2.resize(pha, (w, h), interpolation=cv2.INTER_LINEAR)[y0:y1, x0:x1] if (x1 - x0) * (y1 - y0) > 0.6 * w * h \
+            else cv2.resize(pha[int(y0 * sy):max(int(y0 * sy) + 1, int(np.ceil(y1 * sy))),
+                                int(x0 * sx):max(int(x0 * sx) + 1, int(np.ceil(x1 * sx)))], (x1 - x0, y1 - y0),
+                            interpolation=cv2.INTER_LINEAR)
+        # Snap the edge to the real picture at half size, then firm it up (clean, not soft).
+        bw, bh = x1 - x0, y1 - y0
+        hw, hh = max(32, bw // 2), max(32, bh // 2)
+        guide = cv2.cvtColor(cv2.resize(bgr[y0:y1, x0:x1], (hw, hh), interpolation=cv2.INTER_AREA),
+                             cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
+        g = _guided_filter(guide, cv2.resize(m, (hw, hh), interpolation=cv2.INTER_AREA))
+        g = np.clip((g - 0.35) / 0.3, 0, 1)
+        return cv2.resize(g, (bw, bh), interpolation=cv2.INTER_LINEAR)
+
+    def close(self):
+        self._sess = None
+
+
+def make_segmenter(quality: str = "sharp"):
+    """The best cut-out available: video matting when its model is installed, else MediaPipe."""
+    if (config.MODELS_DIR / VideoMatter.MODEL).exists():
+        try:
+            return VideoMatter(quality)
+        except Exception as exc:  # noqa: BLE001 — never block a save over the cut-out model
+            print(f"[vision] video matting unavailable ({exc}); using MediaPipe")
+    return PersonSegmenter(quality)
+
+
 class PersonSegmenter:
     """Soft 0..1 mask of where the person is, for the headline area of each frame.
 
