@@ -20,7 +20,7 @@ export class Preview {
     this.logoImg = null;
     this.wm = new Image();
     this.wm.onload = () => this.draw();
-    this.wm.src = "/static/brand/watermark.png";
+    this.wm.src = "/static/brand/watermark.png?v=2";
     this.brollVids = {};
     this.person = document.createElement("canvas");
     this.person.width = this.CW; this.person.height = this.CH;
