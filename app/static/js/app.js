@@ -677,7 +677,7 @@ function closeCamera() {
   $("cam").hidden = true;
   document.body.classList.remove("cam-open");
 }
-$("btnRecord").addEventListener("click", openCamera);
+$("btnRecord").addEventListener("click", () => { state.tpOff = true; openCamera(); });
 $("camClose").addEventListener("click", () => {
   if (!$("camReview").hidden && !confirm("Close the camera and delete this take?")) return;
   if (cam.rec && !confirm("Stop and delete this recording?")) return;
@@ -946,7 +946,8 @@ const tp = { speed: +(recall("lp_tp_speed") || 3), size: +(recall("lp_tp_size") 
 function tpScript() { return recall("lp_tp_script") || ""; }
 function tpRender() {
   const text = tpScript().trim();
-  const show = !!text && recall("lp_tp_hidden") !== "1";
+  // "Record video" = no teleprompter, even if a script is saved from last time (state.tpOff).
+  const show = !!text && recall("lp_tp_hidden") !== "1" && !state.tpOff;
   $("tp").hidden = !show;
   $("cam").classList.toggle("has-tp", show);
   $("tpOpen").textContent = "📜 Teleprompter";
@@ -976,6 +977,7 @@ function tpPlay(on) {
 function tpRestart() { tpPlay(false); $("tpScroll").scrollTop = 0; tp.acc = 0; }
 function tpSet(k, v) { tp[k] = v; store(k === "speed" ? "lp_tp_speed" : "lp_tp_size", v); tpRender(); }
 $("tpOpen").addEventListener("click", () => {
+  state.tpOff = false; // they asked for the teleprompter inside the camera
   tpPlay(false);
   $("tpInput").value = tpScript();
   tpCount();
@@ -1063,6 +1065,7 @@ $("aiGo").addEventListener("click", async () => {
 });
 // Landing page shortcut: open the camera with the script writer ready.
 $("btnAiWriter").addEventListener("click", async () => {
+  state.tpOff = false;
   await openCamera();
   if ($("cam").hidden) return;
   $("tpOpen").click();
