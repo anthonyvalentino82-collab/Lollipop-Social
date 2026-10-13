@@ -95,7 +95,10 @@ export class PersonMasker {
     this.rect = r;
     const S = this.input.width;
     const side = Math.min(r.w, r.h);
-    const scale = S / side; // mask pixels per source pixel
+    // The edge is worked out on a finer grid than the model's 256 px (up to ~2x, about 540 px
+    // across), so the jaw / neck / collar line comes out crisp instead of soft and steppy.
+    const U = Math.max(1, Math.min(2, 540 / Math.max(1, r.w * (S / side))));
+    const scale = (S * U) / side; // mask pixels per source pixel
     const MW = Math.max(1, Math.round(r.w * scale)), MH = Math.max(1, Math.round(r.h * scale));
     const tall = r.h >= r.w, L = tall ? r.h : r.w;
     const n = L <= side + 1 ? 1 : Math.max(2, Math.ceil((L - side * 0.15) / (side * 0.85)));
@@ -121,19 +124,22 @@ export class PersonMasker {
           let prev = this.prevs[k];
           if (!prev || prev.length !== data.length) prev = this.prevs[k] = new Float32Array(data);
           const ox = tall ? 0 : Math.round(o * scale), oy = tall ? Math.round(o * scale) : 0;
-          const fx = S / w, fy = S / h;
-          for (let y = 0; y < S; y++) {
+          const SU = Math.round(S * U), fx = w / SU, fy = h / SU;
+          const sm = (i) => 0.3 * prev[i] + 0.7 * data[i]; // light smoothing against flicker
+          for (let y = 0; y < SU; y++) {
             const ay = oy + y; if (ay >= MH) break;
-            const my = Math.min(h - 1, (y / fy) | 0);
-            for (let x = 0; x < S; x++) {
+            const yy = Math.max(0, Math.min(h - 1, (y + 0.5) * fy - 0.5)), y0 = yy | 0, y1 = Math.min(h - 1, y0 + 1), wy = yy - y0;
+            for (let x = 0; x < SU; x++) {
               const ax = ox + x; if (ax >= MW) break;
-              const i = my * w + Math.min(w - 1, (x / fx) | 0);
-              const v = 0.4 * prev[i] + 0.6 * data[i]; // light smoothing against flicker
+              // Smooth (bilinear) upscale of the model's answer: no stair-steps along the edge.
+              const xx = Math.max(0, Math.min(w - 1, (x + 0.5) * fx - 0.5)), x0 = xx | 0, x1 = Math.min(w - 1, x0 + 1), wx = xx - x0;
+              const v = (sm(y0 * w + x0) * (1 - wx) + sm(y0 * w + x1) * wx) * (1 - wy)
+                      + (sm(y1 * w + x0) * (1 - wx) + sm(y1 * w + x1) * wx) * wy;
               const j = ay * MW + ax;
               if (v > acc[j]) acc[j] = v;
             }
           }
-          for (let i = 0; i < data.length; i++) prev[i] = 0.4 * prev[i] + 0.6 * data[i];
+          for (let i = 0; i < data.length; i++) prev[i] = 0.3 * prev[i] + 0.7 * data[i];
         });
       }
       // Snap the edge to the real outline in the picture (edge-aware "guided filter", the same
@@ -153,16 +159,16 @@ export class PersonMasker {
         const g = (rgba[i * 4] * 0.299 + rgba[i * 4 + 1] * 0.587 + rgba[i * 4 + 2] * 0.114) / 255;
         I[i] = g; II[i] = g * g; IP[i] = g * acc[i];
       }
-      const rad = Math.max(2, Math.round(w / 90));
+      const rad = Math.max(2, Math.round(w / 110));
       const box = (src, out) => boxFilter(src, out, t, w, h, rad);
       box(I, mI); box(acc, mP); box(II, mII); box(IP, mIP);
       for (let i = 0; i < N; i++) {
         const va = mII[i] - mI[i] * mI[i], cov = mIP[i] - mI[i] * mP[i];
-        A[i] = cov / (va + 1e-3); B[i] = mP[i] - A[i] * mI[i];
+        A[i] = cov / (va + 5e-4); B[i] = mP[i] - A[i] * mI[i];
       }
       box(A, mII); box(B, mIP);
       const a = acc;
-      for (let i = 0; i < N; i++) a[i] = Math.max(0, Math.min(1, (mII[i] * I[i] + mIP[i] - 0.4) / 0.25));
+      for (let i = 0; i < N; i++) a[i] = Math.max(0, Math.min(1, (mII[i] * I[i] + mIP[i] - 0.42) / 0.2));
       // Spill guard: refreshed when the picture is paused/jumped and every ~8 updates while playing.
       if (guardSeg) {
         this.guardAge = (this.guardAge || 0) + 1;

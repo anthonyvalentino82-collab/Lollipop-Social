@@ -68,13 +68,14 @@ class VideoMatter:
             else cv2.resize(pha[int(y0 * sy):max(int(y0 * sy) + 1, int(np.ceil(y1 * sy))),
                                 int(x0 * sx):max(int(x0 * sx) + 1, int(np.ceil(x1 * sx)))], (x1 - x0, y1 - y0),
                             interpolation=cv2.INTER_LINEAR)
-        # Snap the edge to the real picture at half size, then firm it up (clean, not soft).
+        # Snap the edge to the real picture at 3/4 size, then firm it up: a crisp line along the
+        # jaw, neck and collar instead of a soft halo (more than twice the guide pixels of before).
         bw, bh = x1 - x0, y1 - y0
-        hw, hh = max(32, bw // 2), max(32, bh // 2)
+        hw, hh = max(32, bw * 3 // 4), max(32, bh * 3 // 4)
         guide = cv2.cvtColor(cv2.resize(bgr[y0:y1, x0:x1], (hw, hh), interpolation=cv2.INTER_AREA),
                              cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
-        g = _guided_filter(guide, cv2.resize(m, (hw, hh), interpolation=cv2.INTER_AREA))
-        g = np.clip((g - 0.35) / 0.3, 0, 1)
+        g = _guided_filter(guide, cv2.resize(m, (hw, hh), interpolation=cv2.INTER_AREA), r=9, eps=4e-4)
+        g = np.clip((g - 0.4) / 0.2, 0, 1)
         return cv2.resize(g, (bw, bh), interpolation=cv2.INTER_LINEAR)
 
     def close(self):

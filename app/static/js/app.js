@@ -49,7 +49,7 @@ function fontPicker(label, builtins, current, onpick) {
 }
 const TEXT_COLORS = ["#FFFFFF", "#E9E1D3", "#F2C230", "#E3202A", "#111111", "#C4C4C4"];
 const ACCENT_COLORS = ["#F2C230", "#E3202A", "#D7262E", "#FFFFFF", "#33C3F0", "#7CFC8A"];
-const INTENSITY = { subtle: 1.08, medium: 1.15, strong: 1.25 };
+const INTENSITY = { subtle: 1.14, medium: 1.22, strong: 1.30 };
 
 // ---------- helpers ----------
 function el(tag, attrs = {}, ...kids) {
@@ -1681,7 +1681,7 @@ function autoBrollStep() {
 async function buildAuto() {
   const p = state.project, a = state.auto;
   stopSample();
-  p.zoom.intensity = "subtle"; p.zoom.enabled = true; // slow, gentle zooms only
+  p.zoom.intensity = "medium"; p.zoom.enabled = true; // a few big, slow zooms
   save(["zoom"]);
   let broll = { mode: "ai" };
   if (a.brollMode === "off") broll = { mode: "off" };

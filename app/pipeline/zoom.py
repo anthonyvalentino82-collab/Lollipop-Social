@@ -1,9 +1,9 @@
-"""Auto zoom: subtle push-ins on emphasised words."""
+"""Auto zoom: a few big, slow push-ins on emphasised words."""
 import re
 
 import numpy as np
 
-INTENSITY = {"subtle": 1.08, "medium": 1.15, "strong": 1.25}
+INTENSITY = {"subtle": 1.14, "medium": 1.22, "strong": 1.30}
 STOP = set("a an the and or but so to of in on at for is are was were be it i you we they this that".split())
 
 
@@ -30,43 +30,52 @@ def plan_zooms(words: list[dict], energy_db: list[float], intensity: str = "medi
         scores.append(s)
 
     target = INTENSITY.get(intensity, INTENSITY["medium"])
-    # Pick the emphasis words (spread out: each zoom now takes several seconds).
-    chosen = []
-    for i in np.argsort(scores)[::-1]:
-        if scores[i] < 0.6:
-            break
-        t = words[i]["start"]
-        if t < 1.2 or any(abs(t - words[k]["start"]) < max(min_gap, 5.0) for k in chosen):
-            continue
-        chosen.append(i)
-    chosen.sort(key=lambda k: words[k]["start"])
-
-    # Organic, cinematic moves: slow push in, hold through the phrase, slow drift back out.
-    # Each zoom gets a different feel (and never the same one twice in a row), so there's no
-    # pattern: slow in / slow out, quicker in / slow out, slow in / quicker out, medium…
-    # The random choices are seeded by the words, so the same video always gets the same zooms.
     import random
     rng = random.Random(" ".join(w["w"] for w in words[:40]))
-    moves = [((2.2, 3.2), (2.2, 3.4)), ((0.9, 1.3), (2.0, 3.0)), ((2.0, 3.0), (0.9, 1.3)), ((1.4, 2.0), (1.4, 2.0))]
+    total = words[-1]["end"]
+    # Few, big, unhurried zooms: about one per 30 s (1 in a 15-30 s reel, 2 in a 60 s reel),
+    # each one a slow push in, a long hold, a slow drift out, then 10-15 s of stillness.
+    max_n = max(1, int(round(total / 30.0)))
+    min_sep = max(min_gap, 18.0)  # push-in + hold + drift-out + rest
+
+    def pick(threshold):
+        chosen = []
+        for i in np.argsort(scores)[::-1]:
+            if scores[i] < threshold or len(chosen) >= max_n:
+                break
+            t = words[i]["start"]
+            if t < 2.5 or t > total - 4.0 or any(abs(t - words[k]["start"]) < min_sep for k in chosen):
+                continue
+            chosen.append(i)
+        return chosen
+
+    chosen = pick(0.6) or pick(-99)  # always at least one zoom when there's room for it
+    chosen.sort(key=lambda k: words[k]["start"])
+
+    # Each zoom gets its own feel (never the same twice in a row), so there's no pattern:
+    # slow in / slow out, slower in / quicker out, quicker in / slower out. Seeded by the words,
+    # so the same video always gets the same zooms.
+    moves = [((3.0, 4.0), (3.0, 4.0)), ((3.5, 4.5), (2.2, 2.8)), ((2.2, 2.8), (3.5, 4.5))]
     segments, last_move, free_at = [], None, 0.0
     for i in chosen:
         t = words[i]["start"]
         move = rng.choice([m for m in range(len(moves)) if m != last_move])
         rin = rng.uniform(*moves[move][0])
         rout = rng.uniform(*moves[move][1])
-        # Fully zoomed in right as the emphasised word lands (start the push-in before it). If the
-        # previous zoom is still settling, start later and keep the full slow move: never rush it.
-        start = max(free_at, t - rin * 0.9)
-        # Hold until the phrase ends (pause / punctuation), up to ~3.5 s.
+        # Fully zoomed in right as the emphasised word lands (start the push-in before it).
+        start = max(free_at, t - rin)
+        # Stay in through the phrase: at least 3-5 s, up to 6.5 s, ending on a word boundary.
+        hold = rng.uniform(3.0, 5.0)
         j = i
-        while j + 1 < len(words) and words[j + 1]["start"] - words[j]["end"] < 0.35 \
-                and not words[j]["w"].endswith((".", "!", "?")) and words[j + 1]["end"] - t < 3.5:
+        while j + 1 < len(words) and words[j + 1]["end"] - t < 6.5 and \
+                (words[j]["end"] - t < hold or not (words[j]["w"].endswith((".", "!", "?"))
+                                                    or words[j + 1]["start"] - words[j]["end"] > 0.35)):
             j += 1
-        end = max(start + rin + 0.6, words[j]["end"] + rng.uniform(0.1, 0.6))
-        if start >= end:
+        end = min(max(start + rin + hold, words[j]["end"] + 0.2), total - rout)
+        if end <= start + rin:
             continue
-        amount = (target - 1) * rng.uniform(0.75, 1.15) * (1.15 if scores[i] > 2.0 else 1.0)
+        amount = (target - 1) * rng.uniform(0.9, 1.1)
         segments.append({"start": round(start, 3), "end": round(end, 3), "scale": round(1 + amount, 3),
                          "rin": round(rin, 2), "rout": round(rout, 2), "smooth": True})
-        last_move, free_at = move, end + rout + rng.uniform(0.4, 1.5)  # rest before the next one
+        last_move, free_at = move, end + rout + rng.uniform(10.0, 15.0)  # long rest before the next one
     return segments
