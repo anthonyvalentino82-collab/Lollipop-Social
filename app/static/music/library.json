@@ -1,97 +1,97 @@
 [
   {
     "id": "clocks",
-    "name": "Clocks",
+    "name": "LolliClocks",
     "vibe": "Short guitar",
     "file": "clocks.mp3"
   },
   {
     "id": "human-nature",
-    "name": "Human Nature",
+    "name": "Human LolliNature",
     "vibe": "Acoustic guitar",
     "file": "human-nature.mp3"
   },
   {
     "id": "iris",
-    "name": "Iris",
+    "name": "Iris in Candyland",
     "vibe": "Heartfelt",
     "file": "iris.mp3"
   },
   {
     "id": "peter-tranquil",
-    "name": "Tranquil",
+    "name": "Tranquil Twist",
     "vibe": "Calm",
     "file": "peter-tranquil.mp3"
   },
   {
     "id": "toto",
-    "name": "Toto",
+    "name": "Toto My LolliPOP",
     "vibe": "Feel-good",
     "file": "toto.mp3"
   },
   {
     "id": "learn-to-fly",
-    "name": "Learn to Fly",
+    "name": "Learn to Fly a LolliPOP",
     "vibe": "Upbeat",
     "file": "learn-to-fly.mp3"
   },
   {
     "id": "say-it-aint-so",
-    "name": "Say It Ain't So",
+    "name": "Say It Ain't LolliPOP So",
     "vibe": "Laid-back rock",
     "file": "say-it-aint-so.mp3"
   },
   {
     "id": "stapleton",
-    "name": "Chris Stapleton",
+    "name": "Country Candy",
     "vibe": "Country soul",
     "file": "stapleton.mp3"
   },
   {
     "id": "still-believe",
-    "name": "Still Believe",
+    "name": "Still Believe in LolliPOP",
     "vibe": "Pop",
     "file": "still-believe.mp3"
   },
   {
     "id": "alice",
-    "name": "Alice",
+    "name": "Alice in LolliLand",
     "vibe": "Short & sweet",
     "file": "alice.mp3"
   },
   {
     "id": "wonderwall",
-    "name": "Wonderwall",
+    "name": "WonderLolli",
     "vibe": "Acoustic singalong",
     "file": "wonderwall.mp3"
   },
   {
     "id": "thunder",
-    "name": "Thunder",
+    "name": "Thunder LolliPOP",
     "vibe": "Big & energetic",
     "file": "thunder.mp3"
   },
   {
     "id": "over-the-rainbow",
-    "name": "Somewhere Over the Rainbow",
+    "name": "Somewhere Over the LolliPOP",
     "vibe": "Gentle & hopeful",
     "file": "over-the-rainbow.mp3"
   },
   {
     "id": "super-cool",
-    "name": "Super Cool",
+    "name": "Super Cool LolliPOP",
     "vibe": "Short & upbeat",
     "file": "super-cool.mp3"
   },
   {
     "id": "bad-as-i-used-to",
-    "name": "Bad as I Used To",
+    "name": "Bad as I Used to LolliPOP",
     "vibe": "Laid-back groove",
     "file": "bad-as-i-used-to.mp3"
   },
   {
     "id": "final-countdown",
-    "name": "The Final Countdown",
+    "name": "The Final LolliPOP Countdown",
     "vibe": "Acoustic guitar",
     "file": "final-countdown.mp3"
   }
