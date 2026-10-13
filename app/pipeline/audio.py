@@ -6,17 +6,22 @@ import numpy as np
 
 from .media import run, run_with_progress
 
-# Rumble cut -> light noise reduction -> presence boost for clarity -> gentle compression.
-# Loudness is then set with a measured, LINEAR gain (two passes), so the level never
-# pumps up and down the way single-pass dynamic loudnorm can.
+# Make the voice sound big, close and pronounced (like a good podcast mic), in this order:
+#   rumble cut -> noise reduction that follows the room's noise as it changes -> warmth (low body)
+#   -> less mud -> presence (clarity) + a little air -> soften harsh "s" sounds -> steady compression.
+# Loudness is then set with a measured, LINEAR gain (two passes) to the social-media standard
+# (-14 LUFS), so the level never pumps up and down the way single-pass dynamic loudnorm can.
 VOICE_FILTERS = ",".join([
-    "highpass=f=80",
-    "afftdn=nr=10:nf=-40",
-    "equalizer=f=200:t=q:w=1.2:g=-2",
-    "equalizer=f=3200:t=q:w=1.0:g=3",
-    "acompressor=threshold=-22dB:ratio=2.5:attack=15:release=250:makeup=2",
+    "highpass=f=75",
+    "afftdn=nr=14:nf=-42:tn=1",
+    "equalizer=f=120:t=q:w=1.0:g=2.5",
+    "equalizer=f=320:t=q:w=1.2:g=-2.5",
+    "equalizer=f=3500:t=q:w=1.0:g=3.5",
+    "treble=g=2:f=9000",
+    "deesser=i=0.35",
+    "acompressor=threshold=-24dB:ratio=3:attack=10:release=200:makeup=3",
 ])
-LOUDNESS = "I=-16:TP=-1.5:LRA=11"
+LOUDNESS = "I=-14:TP=-1.5:LRA=9"
 
 
 def clean_voice(src: Path, dst: Path, duration: float = 0, on_progress=lambda f: None) -> None:

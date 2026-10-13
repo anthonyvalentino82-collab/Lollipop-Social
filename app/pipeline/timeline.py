@@ -48,6 +48,12 @@ def caption_at(lines: list[dict], t: float):
 
 # ---------- zoom ----------
 
+def soft_ease(x: float) -> float:
+    """Extra-gentle start and finish (smootherstep) for slow, camera-like zooms."""
+    x = min(1.0, max(0.0, x))
+    return x * x * x * (x * (6 * x - 15) + 10)
+
+
 def zoom_scale_at(zoom: dict, t: float) -> float:
     if not zoom.get("enabled", True):
         return 1.0
@@ -57,7 +63,8 @@ def zoom_scale_at(zoom: dict, t: float) -> float:
         rin, rout = seg.get("rin", 0.4), seg.get("rout", 0.5)
         if t < s or t > e + rout:
             continue
-        env = ease((t - s) / rin) if t < s + rin else (1.0 if t <= e else 1 - ease((t - e) / rout))
+        ez = soft_ease if seg.get("smooth") else ease
+        env = ez((t - s) / rin) if t < s + rin else (1.0 if t <= e else 1 - ez((t - e) / rout))
         best = max(best, 1 + (seg["scale"] - 1) * env)
     return best
 

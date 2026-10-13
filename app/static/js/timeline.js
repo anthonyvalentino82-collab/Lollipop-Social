@@ -32,13 +32,16 @@ export function captionAt(lines, t) {
   return null;
 }
 
+// Extra-gentle start and finish (smootherstep) for slow, camera-like zooms. Twin of soft_ease().
+export const softEase = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * x * (x * (6 * x - 15) + 10); };
 export function zoomScaleAt(zoom, t) {
   if (!zoom || zoom.enabled === false) return 1;
   let best = 1;
   for (const seg of zoom.segments || []) {
     const s = seg.start, e = seg.end, rin = seg.rin ?? 0.4, rout = seg.rout ?? 0.5;
     if (t < s || t > e + rout) continue;
-    const env = t < s + rin ? ease((t - s) / rin) : (t <= e ? 1 : 1 - ease((t - e) / rout));
+    const ez = seg.smooth ? softEase : ease;
+    const env = t < s + rin ? ez((t - s) / rin) : (t <= e ? 1 : 1 - ez((t - e) / rout));
     best = Math.max(best, 1 + (seg.scale - 1) * env);
   }
   return best;
