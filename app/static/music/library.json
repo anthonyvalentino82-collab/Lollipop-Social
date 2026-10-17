@@ -94,5 +94,11 @@
     "name": "The Final LolliPOP Countdown",
     "vibe": "Acoustic guitar",
     "file": "final-countdown.mp3"
+  },
+  {
+    "id": "paradise",
+    "name": "LolliPOP Paradise",
+    "vibe": "Short & sunny",
+    "file": "paradise.mp3"
   }
 ]
