@@ -1853,6 +1853,7 @@ async function showTemplates(fresh = true) {
     key: "templates", title: "Pick your favorite look",
     step: "✨ Your 4 AI videos",
     content: [
+      el("p", { class: "tip-move" }, "✋ Want changes? Before you save, drag the captions, headline or logo on the video to move them, and pinch to resize."),
       el("p", { class: "note" }, "Tap a look to see it big and play it. ▶ hears its song."),
       el("div", { class: "tpl-grid" }, ...T.set.map((tpl, i) => {
         const url = tpl.track && tpl.track !== "own" ? lib.find((x) => x.id === tpl.track)?.url : tpl.track === "own" && ownSong(state.project) ? `/files/projects/${state.project.id}/${ownSong(state.project)}` : null;

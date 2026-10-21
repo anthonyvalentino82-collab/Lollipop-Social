@@ -188,6 +188,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px;
 .field > label, .label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
 .note { font-size: 13px; color: var(--muted); margin: 0; }
 .note.warn { color: var(--gold); }
+.tip-move { margin: 0 0 8px; padding: 8px 12px; border-radius: 10px; font-size: 14px; font-weight: 600; line-height: 1.35;
+  color: var(--gold); background: rgba(242, 194, 48, 0.12); border: 1px solid rgba(242, 194, 48, 0.35); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
   border: 1px solid var(--line); background: var(--panel-2); border-radius: 999px; padding: 8px 14px;
