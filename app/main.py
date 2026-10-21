@@ -333,9 +333,24 @@ def upload_music(pid: str, file: UploadFile = File(...)):
     d = projects.pdir(pid)
     for old in d.glob("music.*"):
         old.unlink()
+    for old in d.glob("own.*"):
+        old.unlink()
+    # Kept as own.* (library picks only replace music.*), so the AI looks can switch back to it.
     ext = Path(file.filename or "music.mp3").suffix.lower() or ".mp3"
-    _save_upload(file, d / f"music{ext}")
-    music = {**p["music"], "enabled": True, "file": f"music{ext}", "name": file.filename, "track": None}
+    _save_upload(file, d / f"own{ext}")
+    music = {**p["music"], "enabled": True, "file": f"own{ext}", "name": file.filename, "track": None,
+             "ownFile": f"own{ext}", "ownName": file.filename}
+    return projects.update(pid, {"music": music})
+
+
+@app.post("/api/projects/{pid}/music/own")
+def use_own_music(pid: str):
+    """Switch back to the song the creator uploaded (after trying a library song)."""
+    p = _project_or_404(pid)
+    own = p["music"].get("ownFile")
+    if not own or not (projects.pdir(pid) / own).exists():
+        raise HTTPException(404, "Your song isn't here any more. Upload it again.")
+    music = {**p["music"], "enabled": True, "file": own, "name": p["music"].get("ownName") or "My song", "track": None}
     return projects.update(pid, {"music": music})
 
 

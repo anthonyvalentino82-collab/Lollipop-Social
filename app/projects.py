@@ -343,7 +343,7 @@ def auto_edit(pid: str, progress, opts: dict | None = None) -> dict:
         used: set[str] = set()
         before = broll_mod.used_before()  # clips from earlier videos: get fresh ones
         for k, m in enumerate(moments):
-            progress(0.7 + 0.25 * k / max(1, len(moments)), f"Downloading B-roll: {m['query']}")
+            progress(0.7 + 0.25 * k / max(1, len(moments)), f"AI is picking B-roll: {m['query']}")
             try:
                 if m.get("clip_tag") and m["clip_tag"] not in clips:
                     m["clip_tag"] = ""
@@ -391,7 +391,8 @@ def swap_broll(pid: str, bid: str, progress) -> dict:
     exclude = set(b.get("tried", [])) | {b.get("stock_id", "")}
     exclude |= {x.get("stock_id", "") for x in p["broll"]}  # not one already in this video
     entry = broll_mod.fetch_moment({"start": b["start"], "end": b["end"], "query": b["query"],
-                                    "alts": b.get("alts", [])}, d, {}, exclude, broll_mod.used_before())
+                                    "alts": b.get("alts", []), "text": b.get("text", "")},
+                                   d, {}, exclude, broll_mod.used_before())
     if not entry:
         raise RuntimeError("No other clips found for that topic.")
     entry["tried"] = sorted(set(b.get("tried", [])) | {b.get("stock_id", ""), entry.get("stock_id", "")})

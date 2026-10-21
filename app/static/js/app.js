@@ -1586,6 +1586,15 @@ async function pickLibraryTrack(id, quiet = false) {
     preview.setMusic(`/files/projects/${p.id}/${p.music.file}?v=${Date.now()}`);
   } catch (e) { if (!quiet) toast(e.message); }
 }
+async function useOwnMusic(quiet = false) {
+  const p = state.project;
+  try {
+    const fresh = await api(`/api/projects/${p.id}/music/own`, { method: "POST" });
+    p.music = fresh.music;
+    preview.setMusic(`/files/projects/${p.id}/${p.music.file}?v=${Date.now()}`);
+  } catch (e) { if (!quiet) toast(e.message); }
+}
+const ownSong = (p) => p.music?.ownFile || (p.music?.file && !p.music.track ? p.music.file : null);
 function autoMusicStep() {
   const p = state.project;
   const list = el("div", { class: "song-list" }, el("p", { class: "note" }, "Loading songs…"));
@@ -1596,6 +1605,7 @@ function autoMusicStep() {
       state.auto.track = id;
       if (id === "none") { p.music.enabled = false; save(["music"]); }
       else if (id !== "own") await pickLibraryTrack(id);
+      else if (p.music.ownFile && p.music.file !== p.music.ownFile) await useOwnMusic();
       else { p.music.enabled = true; save(["music"]); }
       refreshSheet();
     } }, play || el("span", { class: "song-play off" }, id === "none" ? "—" : "♪"),
@@ -1605,7 +1615,7 @@ function autoMusicStep() {
   musicLibrary().then((tracks) => {
     list.innerHTML = "";
     for (const t of tracks) list.append(row(t.id, t.name, t.vibe, t.url));
-    if (p.music?.file && !p.music.track) list.append(row("own", p.music.name || "My music", "Your upload", `/files/projects/${p.id}/${p.music.file}`));
+    if (ownSong(p)) list.append(row("own", p.music.ownName || p.music.name || "My music", "Your upload", `/files/projects/${p.id}/${ownSong(p)}`));
     list.append(row("none", "No music", "", null));
     requestAnimationFrame(fitStage);
   }).catch((e) => { list.innerHTML = ""; list.append(el("p", { class: "note warn" }, e.message)); });
@@ -1714,8 +1724,10 @@ const TEMPLATES = [
   { name: "Sunshine", color: "#F2C230", accent: "#FFFFFF", font: "Lobster", block: false, room: 0.36, logo: "right", music: "iris" },
   { name: "Ocean Blue", color: "#2F80ED", accent: "#FFFFFF", font: "Oswald", block: true, room: 0.5, logo: "big", music: "peter-tranquil" },
 ];
-function templateSet() {
-  const a = state.auto || { look: 0, track: state.project.music?.track || null };
+// Look #1 (Classic) always gets the song the creator picked; looks 2-4 each get a different one
+// from the library (mixed up every time, never the picked one, never twice).
+function templateSet(lib = []) {
+  const a = state.auto || { look: 0, track: state.project.music?.track || (ownSong(state.project) ? "own" : null) };
   const looks = captionLooks();
   const others = looks.map((_, k) => k).filter((k) => k !== a.look);
   const noMusic = a.track === "none";
@@ -1725,7 +1737,9 @@ function templateSet() {
     if (!noMusic) {
       if (i === 0) track = a.track || t.music;
       else {
-        track = [t.music, ...TEMPLATES.map((x) => x.music), "toto", "learn-to-fly", "stapleton"].find((m) => !used.has(m));
+        const pool = lib.map((x) => x.id).filter((m) => !used.has(m));
+        track = pool.length ? pool[Math.floor(Math.random() * pool.length)]
+          : [t.music, ...TEMPLATES.map((x) => x.music), "toto", "learn-to-fly", "stapleton"].find((m) => !used.has(m));
         used.add(track);
       }
     }
@@ -1816,14 +1830,15 @@ async function applyTemplate(i) {
   save(["captions", "headline", "logo"]);
   preview.draw();
   if (tpl.track && tpl.track !== "own" && p.music?.track !== tpl.track) await pickLibraryTrack(tpl.track, true);
-  else if (tpl.track === "own" || tpl.track) { p.music.enabled = true; save(["music"]); }
+  else if (tpl.track === "own" && p.music?.ownFile && p.music.file !== p.music.ownFile) await useOwnMusic(true);
+  else if (tpl.track) { p.music.enabled = true; save(["music"]); }
   else if (p.music) { p.music.enabled = false; save(["music"]); }
 }
 
 async function showTemplates(fresh = true) {
   if (fresh || !state.templates) {
     busy("Making your 4 looks…", 0.95);
-    const set = templateSet();
+    const set = templateSet(await musicLibrary().catch(() => []));
     let shots = [];
     try { shots = await snapshotTemplates(set); } catch (e) { console.warn(e); }
     busy(null);
@@ -1832,7 +1847,7 @@ async function showTemplates(fresh = true) {
   }
   const T = state.templates;
   const lib = await musicLibrary().catch(() => []);
-  const songName = (id) => id === "own" ? (state.project.music?.name || "My song") : id ? (lib.find((x) => x.id === id)?.name || id) : "No music";
+  const songName = (id) => id === "own" ? (state.project.music?.ownName || state.project.music?.name || "My song") : id ? (lib.find((x) => x.id === id)?.name || id) : "No music";
   state.wizard = null; state.autoStep = null;
   renderSheet({
     key: "templates", title: "Pick your favorite look",
@@ -1840,7 +1855,7 @@ async function showTemplates(fresh = true) {
     content: [
       el("p", { class: "note" }, "Tap a look to see it big and play it. ▶ hears its song."),
       el("div", { class: "tpl-grid" }, ...T.set.map((tpl, i) => {
-        const url = tpl.track && tpl.track !== "own" ? lib.find((x) => x.id === tpl.track)?.url : tpl.track === "own" ? `/files/projects/${state.project.id}/${state.project.music?.file}` : null;
+        const url = tpl.track && tpl.track !== "own" ? lib.find((x) => x.id === tpl.track)?.url : tpl.track === "own" && ownSong(state.project) ? `/files/projects/${state.project.id}/${ownSong(state.project)}` : null;
         const play = url ? el("button", { class: "tpl-play", "aria-label": "Hear the song", onclick: (e) => { e.stopPropagation(); playSample(url, play); } }, "▶") : null;
         return el("div", { class: `tpl${T.pick === i ? " on" : ""}`, role: "button", onclick: async () => { await applyTemplate(i); refreshSheet(); } },
           T.shots[i] ? el("img", { src: T.shots[i], alt: tpl.name }) : el("div", { class: "tpl-ph", style: `color:${tpl.color}` }, tpl.name),
