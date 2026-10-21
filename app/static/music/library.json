@@ -100,5 +100,17 @@
     "name": "LolliPOP Paradise",
     "vibe": "Melodic & dreamy",
     "file": "paradise.mp3"
+  },
+  {
+    "id": "lollipop-time",
+    "name": "Lollipop Time (Acoustic)",
+    "vibe": "Acoustic",
+    "file": "lollipop-time.mp3"
+  },
+  {
+    "id": "lollipoppin-you",
+    "name": "I'll Be Lollipoppin' You",
+    "vibe": "Feel-good",
+    "file": "lollipoppin-you.mp3"
   }
 ]
