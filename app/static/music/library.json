@@ -1,5 +1,11 @@
 [
   {
+    "id": "wicked",
+    "name": "Wicked LolliPOP",
+    "vibe": "New favorite",
+    "file": "wicked.mp3"
+  },
+  {
     "id": "clocks",
     "name": "LolliClocks",
     "vibe": "Short guitar",

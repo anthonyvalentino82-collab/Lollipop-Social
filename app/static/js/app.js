@@ -1496,11 +1496,11 @@ function startAuto() {
   const len = keptDuration(keptSegments(p.trim, effectiveCuts(p)));
   state.auto = {
     look: Math.max(0, captionLooks().findIndex((x) => x.style.font === p.captions.style.font && x.style.highlight === p.captions.style.highlight)),
-    track: p.music?.track || (p.music?.file ? "own" : "clocks"),
+    track: p.music?.track || (p.music?.file ? "own" : "wicked"),
     count: len <= 20 ? 1 : len <= 45 ? 2 : 3,
     brollMode: "ai", words: [], clips: [],
   };
-  if (state.auto.track === "clocks" && !p.music?.file) pickLibraryTrack("clocks", true);
+  if (state.auto.track === "wicked" && !p.music?.file) pickLibraryTrack("wicked", true);
   Object.assign(p.captions.style, captionLooks()[state.auto.look].style);
   p.captions.enabled = true;
   save(["captions"]);
@@ -1719,7 +1719,7 @@ async function buildAuto() {
 //   block: every line stretched to the same width (one squared-off block of text)
 //   room:  how much of the screen height (from the top) the headline may use; "toCaptions" = all of it
 const TEMPLATES = [
-  { name: "Classic", color: "#FFFFFF", accent: "#F2C230", font: "Anton", block: true, room: "toCaptions", logo: "left", music: "clocks" },
+  { name: "Classic", color: "#FFFFFF", accent: "#F2C230", font: "Anton", block: true, room: "toCaptions", logo: "left", music: "wicked" },
   { name: "Bold Red", color: "#E3202A", accent: "#FFFFFF", font: "Bebas Neue", block: false, room: 0.42, logo: "middle", music: "human-nature" },
   { name: "Sunshine", color: "#F2C230", accent: "#FFFFFF", font: "Lobster", block: false, room: 0.36, logo: "right", music: "iris" },
   { name: "Ocean Blue", color: "#2F80ED", accent: "#FFFFFF", font: "Oswald", block: true, room: 0.5, logo: "big", music: "peter-tranquil" },
